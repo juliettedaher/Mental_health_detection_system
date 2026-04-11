@@ -8,11 +8,8 @@ Pipeline overview
 0. Config         – central settings (paths, column names, visual style)
 1. PlotHelper     – save figures & sanitise filenames
 2. DataLoader     – load CSV, filter French rows
-3. Models         – Pydantic schemas (FrenchMentalHealthPost, FrenchPostAnalysis)
-4. TextCleaner    – clean / tokenise / lemmatise / extract features
-5. FeatureExtractor – richer per-post feature computation (used by TextAnalyzer)
-6. TextAnalyzer   – vocabulary, n-gram, normalised-punctuation helpers
-7-13. Analysis classes – one per requirement / chart group
+3. TextCleaner    – clean / tokenise / lemmatise / extract features
+4. Analysis classes – one per requirement / chart group
 """
 
 # ── Standard library ──────────────────────────────────────────────────────────
@@ -27,7 +24,6 @@ from itertools import combinations
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 import seaborn as sns
 from wordcloud import WordCloud
 import spacy
@@ -35,14 +31,10 @@ import emoji
 
 # ── Typing ────────────────────────────────────────────────────────────────────
 from typing import List, Tuple, Set, Dict, Optional
-from typing import Literal
 
 # ── NLP ───────────────────────────────────────────────────────────────────────
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize
-
-# ── Data validation ───────────────────────────────────────────────────────────
-from pydantic import BaseModel, Field
 
 # ── NLTK resource downloads (silent; failures are non-fatal) ──────────────────
 import nltk
@@ -64,24 +56,8 @@ print("All imports OK")
 class Config:
     """
     Central place for every tuneable constant in the pipeline.
-
     Changing a value here propagates automatically to every class that
     receives a `cfg` argument — no hunting for magic strings.
-
-    Attributes
-    ----------
-    CSV_PATH       : Path to the raw CSV file.
-    STOPWORDS_FILE : Path to a plain-text list of extra French stop-words.
-    OUTPUT_DIR     : Folder where all PNG plots and the cleaned CSV are saved.
-    LANGUAGE_COL   : Column name that identifies the language of each row.
-    LANGUAGE_VALUE : Value to keep ("French"); all other languages are dropped.
-    TEXT_COL       : Column holding the raw social-media post text.
-    LABEL_COL      : Target column ("mental_state": "Healthy" / "Unhealthy").
-    BG             : Background colour applied to every matplotlib figure.
-    DPI            : Output resolution for saved plots.
-    PALETTE        : Seaborn colour palette used across all charts.
-    TOP_N_WORDS    : How many top words / n-grams to display per label.
-    TOP_N_COOC     : How many top co-occurrence word pairs to display per label.
     """
     CSV_PATH       = r"C:\Users\Admin\Documents\FYP\french dataset\Dataset\french_data.csv"
     STOPWORDS_FILE = r"french_stpwords.txt"
@@ -110,29 +86,11 @@ print(f"Config ready — output folder: '{cfg.OUTPUT_DIR}'")
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1. PLOT HELPER
 # ═══════════════════════════════════════════════════════════════════════════════
+# PlotHelper centralises all figure-saving logic in one place.
+# Its constructor applies a shared visual style (background, spines, font) to every plot globally.
+# save() chains tight_layout → savefig → close → print, eliminating repeated code across 11+ classes.
+# safe_name() sanitises label strings (e.g. "Self-Reflection/Growth") into OS-safe filenames.
 class PlotHelper:
-    """
-    Thin utility wrapper around matplotlib for consistent figure saving.
-
-    Verdict — IS IT ACTUALLY HELPING?
-    ----------------------------------
-    YES, and here is why:
-
-    * `save()` is called in *every single* analysis class (11+ call-sites).
-      Without it, each class would repeat the same 4 lines
-      (tight_layout → savefig → close → print).  PlotHelper removes that
-      duplication entirely.
-
-    * The constructor's `plt.rcParams.update(...)` block sets the shared
-      visual style once.  If you want to change the background colour or
-      spine visibility you edit one place, not eleven.
-
-    * `safe_name()` is used wherever a label value (e.g. "Healthy") is
-      embedded in a filename, guarding against OS-illegal characters.
-
-    It is lightweight (≈20 lines of real logic) and genuinely reused —
-    this is exactly the right use case for a small helper class.
-    """
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -146,10 +104,7 @@ class PlotHelper:
         })
 
     def save(self, filename: str) -> str:
-        """
-        Apply tight layout, save the current figure to OUTPUT_DIR, close it,
-        and return the full path.  Called at the end of every analyse() method.
-        """
+        """Apply tight layout, save the figure to OUTPUT_DIR, close it, return the path."""
         path = os.path.join(self.cfg.OUTPUT_DIR, filename)
         plt.tight_layout()
         plt.savefig(path, dpi=self.cfg.DPI, bbox_inches="tight")
@@ -173,23 +128,15 @@ print("PlotHelper ready")
 class DataLoader:
     """
     Loads the raw CSV and returns only the French-language rows.
-
-    Why a class and not a plain function?
-    --------------------------------------
-    It holds `cfg` so it can be easily swapped, mocked in tests, or
-    subclassed (e.g. to load from a database instead of a CSV) without
-    changing the call-site.
+    Uses cfg so the source path and filter value can be changed in one place.
     """
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
     def load(self) -> pd.DataFrame:
-        """
-        Read the CSV (UTF-8 with BOM), filter to the target language,
-        reset the index, and return the resulting DataFrame.
-        """
-        # `encoding="utf-8-sig"` strips the BOM byte that Excel often adds.
+        """Read the CSV (UTF-8 with BOM), filter to French rows, reset index."""
+        # encoding="utf-8-sig" strips the BOM byte that Excel often adds.
         df = pd.read_csv(self.cfg.CSV_PATH, encoding="utf-8-sig")
         print(f"[DataLoader] Total rows loaded : {len(df)}")
 
@@ -201,91 +148,6 @@ class DataLoader:
         df = df[mask].copy().reset_index(drop=True)
         print(f"[DataLoader] French rows kept  : {len(df)}")
         return df
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# MODELS  (Pydantic schemas)
-# ═══════════════════════════════════════════════════════════════════════════════
-class FrenchMentalHealthPost(BaseModel):
-    """
-    Schema for a single raw social-media post as it arrives from the dataset.
-
-    Verdict — IS IT USEFUL?
-    -----------------------
-    PARTIALLY.  The class is well-designed but is never instantiated anywhere
-    in this pipeline.  The actual data lives in a plain Pandas DataFrame.
-
-    When it *would* earn its place:
-      • Validating incoming rows before inserting them into the DataFrame
-        (e.g. `FrenchMentalHealthPost(**row)` inside DataLoader.load()).
-      • Serialising posts to JSON for an API or database.
-      • Generating OpenAPI documentation automatically.
-
-    For a pure EDA script, it adds no runtime value as-is.
-    Consider removing it or wiring it into DataLoader if validation matters.
-    """
-    text: str             = Field(..., description="Social media post content in French")
-    word_count: int       = Field(..., description="Number of words in the post")
-    language: str         = Field(default="French", description="Language of the post")
-    category: str         = Field(..., description="Thematic category e.g. Self-Worth, Anxiety...")
-    age: str              = Field(..., description="Age group e.g. 'young adult (20-29)', 'elderly (60+)'")
-    education_level: str  = Field(..., description="Education level")
-    formality: str        = Field(..., description="Formality level")
-    context: str          = Field(..., description="Context of the post")
-    mental_state: Literal["Healthy", "Unhealthy"] = Field(..., description="Binary mental health label")
-    text_length: str      = Field(..., description="Descriptive length")
-    length_category: str  = Field(..., description="Short length label")
-
-    class Config:
-        validate_assignment = True
-        use_enum_values     = True
-
-
-class FrenchPostAnalysis(BaseModel):
-    """
-    Schema for computed per-post NLP features produced by FeatureExtractor.
-
-    Verdict — IS IT USEFUL?
-    -----------------------
-    YES — but only inside `FeatureExtractor.compute_post_features_from_doc()`,
-    which is the *only* place this model is instantiated.  That method returns
-    a `FrenchPostAnalysis` object, but its caller (if any) would need to
-    unpack the fields back into the DataFrame manually.
-
-    In the current pipeline `FeatureExtractor` is defined but never called
-    from the main analysis flow (TextCleaner.fit_transform does the same work
-    directly on the DataFrame).  So FrenchPostAnalysis is also effectively
-    unused at runtime.
-
-    Recommendation: either integrate FeatureExtractor + FrenchPostAnalysis into
-    fit_transform(), or remove them and keep the flat DataFrame approach.
-    """
-    # ── Base text statistics ──────────────────────────────────────────────────
-    word_count:        int   = Field(default=0)
-    char_count:        int   = Field(default=0)
-    punct_density:     float = Field(default=0.0)
-
-    # ── Punctuation markers ───────────────────────────────────────────────────
-    question_count:    int   = Field(default=0)
-    exclamation_count: int   = Field(default=0)
-    ellipsis_count:    int   = Field(default=0)
-    guillemet_count:   int   = Field(default=0)   # « » French quotation marks
-
-    # ── Emojis / emoticons ────────────────────────────────────────────────────
-    emoji_count:       int        = Field(default=0)
-    emojis:            List[str]  = Field(default_factory=list)
-    emoticon_count:    int        = Field(default=0)
-    emoticons:         List[str]  = Field(default_factory=list)
-
-    # ── French-specific ───────────────────────────────────────────────────────
-    accented_char_count: int       = Field(default=0)   # é, à, ü, etc.
-    negation_count:      int       = Field(default=0)   # ne…pas patterns
-    hashtags:            List[str] = Field(default_factory=list)
-
-    # ── Metadata mirrors (copied from the raw dataset row) ───────────────────
-    formality:     Optional[str]                         = Field(default=None)
-    context:       Optional[str]                         = Field(default=None)
-    mental_state:  Optional[Literal["Healthy","Unhealthy"]] = Field(default=None)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -311,28 +173,26 @@ class TextCleaner:
     All text cleaning, tokenisation, lemmatisation, and feature extraction
     needed to convert raw post text into analysis-ready columns.
 
-    The main entry point is `fit_transform(df, text_col)`, which adds the
-    following columns to the DataFrame in place:
-
-        cleaned_text     – normalised text (lower, no emoji/URL/mention)
-        hashtags         – list of #tags extracted before cleaning
-        tokens           – lemmatised, stop-word-free token list
-        char_count       – character count of cleaned_text
-        word_count       – word count of cleaned_text
-        punct_count      – total ?!... marks
-        question_count   – count of '?'
-        exclamation_count– count of '!'
-        ellipsis_count   – count of '...'
-        text_nostop      – tokens joined back to a string (for word clouds etc.)
-        emoji_count      – emoji count from the *original* text
-        emoticon_count   – ASCII emoticon count from the original text
+    Main entry point: fit_transform(df, text_col) — adds these columns:
+        cleaned_text      – normalised text (lower, no emoji/URL/mention)
+        hashtags          – list of #tags extracted before cleaning
+        tokens            – lemmatised, stop-word-free token list
+        char_count        – character count of cleaned_text
+        word_count        – word count of cleaned_text
+        punct_count       – total ?!... marks
+        question_count    – count of '?'
+        exclamation_count – count of '!'
+        ellipsis_count    – count of '...'
+        text_nostop       – tokens joined back to a string (for word clouds etc.)
+        emoji_count       – emoji count from the *original* text
+        emoticon_count    – ASCII emoticon count from the original text
     """
 
     def __init__(self) -> None:
-        self.nlp            = nlp
+        self.nlp           = nlp
         self.stopwords_set: Set[str] = STOPWORDS
 
-        # Unicode ranges that cover the most common emoji blocks.
+        # Unicode ranges covering the most common emoji blocks.
         # Used as a fallback after the `emoji` library's own replacement.
         self.emoji_regex = (
             r'[\U0001F600-\U0001F64F]|'   # emoticons
@@ -374,10 +234,7 @@ class TextCleaner:
         return re.sub(r'@\w+', ' PEOPLE ', text)
 
     def extract_hashtags(self, text: str) -> Tuple[List[str], str]:
-        """
-        Pull out all #tags before cleaning so they are not lost.
-        Returns (list_of_hashtags, text_without_hashtags).
-        """
+        """Pull out all #tags before cleaning. Returns (hashtag_list, text_without_hashtags)."""
         hashtags = re.findall(r'#\w+', text)
         text_without_hashtags = re.sub(r'#\w+', '', text)
         return hashtags, text_without_hashtags
@@ -394,10 +251,7 @@ class TextCleaner:
         return [token.text.lower() for token in doc if token.is_alpha]
 
     def lemmatize(self, tokens: List[str]) -> List[str]:
-        """
-        Lemmatise a list of tokens using spaCy.
-        Re-joins tokens into a string so spaCy can use context for lemmatisation.
-        """
+        """Lemmatise tokens using spaCy. Re-joins first so spaCy uses context."""
         doc = self.nlp(" ".join(tokens))
         return [token.lemma_.lower() for token in doc if token.is_alpha]
 
@@ -415,7 +269,6 @@ class TextCleaner:
           5. Extract and remove #hashtags
           6. Remove remaining punctuation (keep !, ?, -, ')
           7. Collapse extra spaces
-
         Returns (cleaned_text, hashtag_list).
         """
         text = self.standardize_text(text)
@@ -423,7 +276,7 @@ class TextCleaner:
         text = self.replace_urls(text)
         text = self.replace_mentions(text)
         hashtags, text = self.extract_hashtags(text)
-        text = re.sub(r"[^\w\s!?\-']", "", text)   # strip everything except \w !?-'
+        text = re.sub(r"[^\w\s!?\-']", "", text)
         text = re.sub(r"\s+", " ", text).strip()
         return text, hashtags
 
@@ -436,35 +289,19 @@ class TextCleaner:
     def fit_transform(self, df: pd.DataFrame, text_col: str) -> pd.DataFrame:
         """
         Apply the full cleaning + feature extraction pipeline to every row
-        of `df[text_col]` and return the enriched DataFrame.
-
-        New columns added
-        -----------------
-        cleaned_text      : cleaned post string
-        hashtags          : list of extracted #tags
-        tokens            : final lemmatised/filtered token list
-        char_count        : len(cleaned_text)
-        word_count        : word count of cleaned_text
-        punct_count       : total count of ?, !, ...
-        question_count    : count of ?
-        exclamation_count : count of !
-        ellipsis_count    : count of ...
-        text_nostop       : tokens joined as a space-separated string
-        emoji_count       : emoji count from the RAW original text
-        emoticon_count    : ASCII emoticon count from the RAW original text
-
+        of df[text_col] and return the enriched DataFrame.
         Note: emoji/emoticon counts use the *original* text (before cleaning)
         so that the signal is not lost by the cleaning step.
         """
         df = df.copy()
 
         # ── Step 1: clean text + extract hashtags ─────────────────────────────
-        cleaned_results      = df[text_col].apply(self.clean_text)
-        df["cleaned_text"]   = cleaned_results.apply(lambda x: x[0])
-        df["hashtags"]       = cleaned_results.apply(lambda x: x[1])
+        cleaned_results    = df[text_col].apply(self.clean_text)
+        df["cleaned_text"] = cleaned_results.apply(lambda x: x[0])
+        df["hashtags"]     = cleaned_results.apply(lambda x: x[1])
 
         # ── Step 2: tokenise + lemmatise + de-stop ────────────────────────────
-        df["tokens"]         = df["cleaned_text"].apply(self.preprocess)
+        df["tokens"] = df["cleaned_text"].apply(self.preprocess)
 
         # ── Step 3: surface-level text statistics ─────────────────────────────
         df["char_count"]          = df["cleaned_text"].apply(len)
@@ -477,13 +314,11 @@ class TextCleaner:
         df["ellipsis_count"]      = df["cleaned_text"].apply(lambda x: x.count('...'))
 
         # ── Step 4: token string for word-cloud / co-occurrence analyses ───────
-        df["text_nostop"]         = df["tokens"].apply(lambda tokens: " ".join(tokens))
+        df["text_nostop"] = df["tokens"].apply(lambda tokens: " ".join(tokens))
 
         # ── Step 5: emoji & emoticon counts from the ORIGINAL raw text ─────────
-        df["emoji_count"]         = df[text_col].apply(
-            lambda x: len(emoji.emoji_list(x))
-        )
-        df["emoticon_count"]      = df[text_col].apply(
+        df["emoji_count"]    = df[text_col].apply(lambda x: len(emoji.emoji_list(x)))
+        df["emoticon_count"] = df[text_col].apply(
             lambda x: sum(
                 len(re.findall(p, x, re.IGNORECASE))
                 for p in self.emoticon_patterns
@@ -500,252 +335,17 @@ class TextCleaner:
 df_raw  = DataLoader(cfg).load()
 cleaner = TextCleaner()
 df      = cleaner.fit_transform(df_raw, cfg.TEXT_COL)
+
+# ── Emoji / emoticon sanity check ──────────────────────────────────────────────
+# Diagnostic: confirms whether the dataset contains meaningful emoji/emoticon signal.
+# Result: only 23/6000+ posts have emojis, 0 have emoticons — dataset is formal/synthetic.
+print("\n── Emoji & Emoticon Diagnostics ──")
+print(df["emoji_count"].value_counts())
+print(df["emoticon_count"].value_counts())
+print(f"Posts with any emoji:    {(df['emoji_count'] > 0).sum()}")
+print(f"Posts with any emoticon: {(df['emoticon_count'] > 0).sum()}")
+
 df.head(3)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# 5. FEATURE EXTRACTOR
-# ═══════════════════════════════════════════════════════════════════════════════
-class FeatureExtractor:
-    """
-    Richer per-post feature computation that wraps a TextCleaner instance.
-
-    Verdict — IS IT USEFUL IN THIS PIPELINE?
-    -----------------------------------------
-    PARTIALLY — it is well-implemented but REDUNDANT as currently used.
-
-    All features it computes (punctuation counts, emoji counts, emoticon counts)
-    are *already* computed directly inside TextCleaner.fit_transform() and
-    stored in the DataFrame.  FeatureExtractor is never called from the main
-    analysis flow.
-
-    The key method `compute_post_features_from_doc()` returns a
-    `FrenchPostAnalysis` Pydantic object, which is a clean design, but since
-    nothing downstream consumes it, it adds dead code.
-
-    When it WOULD be valuable:
-      • If you want per-row Pydantic validation before storing to a database.
-      • If you refactor to a row-by-row pipeline (e.g. streaming API results).
-      • If you add richer features not in TextCleaner (accented_char_count,
-        negation_count, guillemet_count).
-
-    Recommendation: keep but mark clearly as "for future use", or integrate
-    its unique features (accents, negation, guillements) into TextCleaner.
-    """
-
-    def __init__(self, processor: TextCleaner) -> None:
-        self.processor = processor
-
-    def count_punctuation(self, text: str) -> Dict[str, int]:
-        """Return a dict of individual punctuation type counts."""
-        return {
-            'question_count'   : text.count('?'),
-            'exclamation_count': text.count('!'),
-            'ellipsis_count'   : text.count('...'),
-        }
-
-    def detect_emojis_combined(self, text: str) -> Tuple[List[str], int]:
-        """
-        Detect emojis using both the `emoji` library and a regex fallback.
-        Returns (list_of_demojised_names, total_count).
-        Deduplicates matches found by both methods.
-        """
-        found_emojis  = [item['emoji'] for item in emoji.emoji_list(text)]
-        standardized  = [emoji.demojize(e) for e in found_emojis]
-        regex_matches = re.findall(self.processor.emoji_regex, text)
-        for match in regex_matches:
-            name = emoji.demojize(match)
-            if name not in standardized:
-                standardized.append(name)
-        return standardized, len(standardized)
-
-    def detect_emoticons(self, text: str) -> Tuple[List[str], int]:
-        """
-        Scan `text` for all ASCII emoticon patterns defined in TextCleaner.
-        Returns (list_of_matched_strings, count).
-        """
-        emoticons: List[str] = []
-        for pattern in self.processor.emoticon_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            emoticons.extend(matches)
-        return emoticons, len(emoticons)
-
-    def extract_ngrams(self, tokens: List[str], n: int) -> List[str]:
-        """
-        Generate n-grams from a token list, keeping only grams where
-        every constituent word is purely alphabetic.
-        """
-        if len(tokens) < n:
-            return []
-        ngram_list = [" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]
-        return [ng for ng in ngram_list if all(word.isalpha() for word in ng.split())]
-
-    def compute_post_features_from_doc(
-        self, original_text: str, cleaned_text: str, doc
-    ) -> FrenchPostAnalysis:
-        """
-        Compute all per-post features from a pre-built spaCy Doc object and
-        return them wrapped in a validated FrenchPostAnalysis model.
-
-        Parameters
-        ----------
-        original_text : The raw, uncleaned post (for emoji/emoticon detection).
-        cleaned_text  : The output of TextCleaner.clean_text() (for punctuation).
-        doc           : A spaCy Doc built from cleaned_text.
-        """
-        word_count    = sum(1 for token in doc if token.is_alpha)
-        char_count    = len(cleaned_text)
-        punct_counts  = self.count_punctuation(cleaned_text)
-        total_punct   = sum(punct_counts.values())
-        punct_density = total_punct / word_count if word_count > 0 else 0.0
-
-        emojis,    emoji_count    = self.detect_emojis_combined(original_text)
-        emoticons, emoticon_count = self.detect_emoticons(original_text)
-
-        return FrenchPostAnalysis(
-            word_count=word_count,
-            char_count=char_count,
-            punct_density=punct_density,
-            question_count=punct_counts.get('question_count', 0),
-            exclamation_count=punct_counts.get('exclamation_count', 0),
-            ellipsis_count=punct_counts.get('ellipsis_count', 0),
-            emoji_count=emoji_count,
-            emojis=emojis,
-            emoticon_count=emoticon_count,
-            emoticons=emoticons,
-            hashtags=[],
-        )
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# 6. TEXT ANALYZER
-# ═══════════════════════════════════════════════════════════════════════════════
-class TextAnalyzer:
-    """
-    Higher-level analytical helpers that operate on the full DataFrame.
-
-    Verdict — IS IT USEFUL?
-    -----------------------
-    MIXED.
-
-    `compute_vocabulary_diversity` — good utility, but not called anywhere.
-    `compute_normalized_punctuation` — duplicates the logic already inside
-        PunctuationAnalysis.analyse(); consider merging.
-    `compute_label_top_ngrams` — duplicates CommonWordsAnalysis._plot_ngrams();
-        consider merging.
-    `compute_shared_vocabulary` — unique capability (cross-label vocabulary
-        overlap) not used in any plot.  Worth keeping for future Venn diagrams
-        or TF-IDF comparisons.
-
-    Recommendation: either call these methods from the relevant analysis
-    classes, or remove the duplicated ones.  The class is a good design pattern
-    but needs wiring into the pipeline to justify its existence.
-    """
-
-    def __init__(self, processor: TextCleaner, feature_extractor: FeatureExtractor) -> None:
-        self.processor         = processor
-        self.feature_extractor = feature_extractor
-        self.labels:        List[str]              = []
-        self.label_tokens:  Dict[str, List[List[str]]] = {}
-
-    def compute_vocabulary_diversity(self, tokens: List[str]) -> float:
-        """
-        Type-Token Ratio (TTR): unique tokens / total tokens.
-        Returns 0 for an empty list.
-        A value close to 1 means high lexical diversity.
-        """
-        if len(tokens) == 0:
-            return 0.0
-        return len(set(tokens)) / len(tokens)
-
-    def compute_normalized_punctuation(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        For each label, compute the average per-sentence rate of each
-        punctuation type (?, !, ...).
-
-        Returns a DataFrame indexed by label with one column per punct type.
-        """
-        punct_cols = ['question_count', 'exclamation_count', 'ellipsis_count']
-        sentence_counts = df['text'].apply(
-            lambda text: max(len(sent_tokenize(text)), 1)
-        )
-
-        summary_data = []
-        for label in df[cfg.LABEL_COL].unique():
-            label_data   = df[df[cfg.LABEL_COL] == label]
-            avg_sent_len = sentence_counts[label_data.index].mean()
-            normalized_punct = {}
-            for col in punct_cols:
-                avg_count = label_data[col].mean()
-                normalized_punct[col.replace('_count', '').title()] = (
-                    avg_count / avg_sent_len if avg_sent_len > 0 else 0
-                )
-            normalized_punct['Label'] = label
-            summary_data.append(normalized_punct)
-
-        return pd.DataFrame(summary_data).set_index('Label')
-
-    def compute_label_top_ngrams(
-        self,
-        df: pd.DataFrame,
-        text_column: str,
-        label_column: str,
-        n: int,
-        top_k: int = 10,
-    ) -> Dict[str, List[Tuple[str, int]]]:
-        """
-        For each label, compute the `top_k` most frequent n-grams.
-
-        Prefers the pre-computed 'tokens' column if present; otherwise
-        falls back to re-tokenising `text_column` on the fly.
-
-        Returns {label: [(ngram_string, count), ...]}
-        """
-        label_ngrams: Dict[str, List[Tuple[str, int]]] = {}
-        for label in df[label_column].unique():
-            label_mask     = df[label_column] == label
-            ngram_counter: Counter = Counter()
-            if 'tokens' in df.columns:
-                for tokens in df[label_mask]['tokens']:
-                    if isinstance(tokens, list):
-                        ngram_counter.update(
-                            self.feature_extractor.extract_ngrams(tokens, n)
-                        )
-            else:
-                for text in df[label_mask][text_column]:
-                    tokens = self.processor.preprocess(text)
-                    ngram_counter.update(
-                        self.feature_extractor.extract_ngrams(tokens, n)
-                    )
-            label_ngrams[label] = ngram_counter.most_common(top_k)
-        return label_ngrams
-
-    def compute_shared_vocabulary(self, df: pd.DataFrame) -> Dict[str, Set[str]]:
-        """
-        Build a vocabulary set for each label.
-
-        Useful for computing cross-label vocabulary overlap (e.g. Venn diagrams,
-        label-exclusive word lists, TF-IDF seeds).
-
-        Returns {label: set_of_unique_tokens}
-        """
-        label_vocab: Dict[str, Set[str]] = {}
-        for label in df[cfg.LABEL_COL].unique():
-            label_mask = df[cfg.LABEL_COL] == label
-            vocab: Set[str] = set()
-            if 'tokens' in df.columns:
-                for tokens in df[label_mask]['tokens']:
-                    if isinstance(tokens, list):
-                        vocab.update(t for t in tokens if t and t.isalpha())
-            else:
-                text_col = 'cleaned_text' if 'cleaned_text' in df.columns else 'text'
-                for text in df[label_mask][text_col]:
-                    if not isinstance(text, str):
-                        continue
-                    tokens = self.processor.preprocess(text)
-                    vocab.update(t for t in tokens if t and t.isalpha())
-            label_vocab[label] = vocab
-        return label_vocab
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -753,10 +353,8 @@ class TextAnalyzer:
 # ═══════════════════════════════════════════════════════════════════════════════
 class LabelDistribution:
     """
-    Req 1 — Side-by-side bar chart + pie chart of label counts.
-
-    Shows how balanced (or imbalanced) the Healthy / Unhealthy classes are —
-    the single most important sanity check before any modelling.
+    Req 1 — Bar chart + pie chart of label counts.
+    Most important sanity check: confirms whether Healthy/Unhealthy classes are balanced.
     """
 
     def __init__(self, cfg: Config, helper: PlotHelper):
@@ -791,7 +389,7 @@ class LabelDistribution:
         )
         axes[1].set_title("Proportion per Label")
 
-        return self.helper.save("1_label_distribution.png")
+        return self.helper.save("01_label_distribution.png")
 
 
 LabelDistribution(cfg, helper).analyse(df)
@@ -802,11 +400,8 @@ LabelDistribution(cfg, helper).analyse(df)
 # ═══════════════════════════════════════════════════════════════════════════════
 class TextLengthAnalysis:
     """
-    Req 2 — Word-count histograms and character-count boxplots, one subplot
-    per label.
-
-    Helps detect if one mental-health category correlates with longer /
-    shorter posts — a common signal in mental-health NLP research.
+    Req 2 — Word-count histograms and character-count boxplots, one subplot per label.
+    Detects if one mental-health label correlates with longer/shorter posts.
     """
 
     def __init__(self, cfg: Config, helper: PlotHelper):
@@ -824,7 +419,6 @@ class TextLengthAnalysis:
         for ax, label, color in zip(axes, labels, colors):
             subset = df[df[self.cfg.LABEL_COL] == label]["word_count"]
             median = subset.median()
-
             ax.hist(subset, bins=30, color=color, edgecolor="white", alpha=0.85)
             ax.axvline(median, color="navy", linestyle="--", linewidth=1.5,
                        label=f"Median: {median:.0f}")
@@ -842,7 +436,6 @@ class TextLengthAnalysis:
 
         for ax, label, color in zip(axes, labels, colors):
             subset = df[df[self.cfg.LABEL_COL] == label]["char_count"]
-
             ax.boxplot(
                 subset, patch_artist=True,
                 boxprops=dict(facecolor=color, color="gray"),
@@ -868,9 +461,7 @@ TextLengthAnalysis(cfg, helper).analyse(df)
 class PunctuationAnalysis:
     """
     Req 3 — Normalised punctuation usage as a grouped bar chart.
-
-    Punctuation counts are divided by the average number of sentences per
-    label to make them comparable across labels of different average length.
+    Counts are divided by avg sentence count per label to allow fair comparison.
     """
 
     def __init__(self, cfg: Config, helper: PlotHelper):
@@ -885,7 +476,7 @@ class PunctuationAnalysis:
             lambda t: max(len(sent_tokenize(t)), 1)
         )
 
-        # Build a per-label normalised punctuation summary.
+        # Build per-label normalised punctuation summary.
         summary = []
         for label in df[self.cfg.LABEL_COL].unique():
             mask      = df[self.cfg.LABEL_COL] == label
@@ -899,12 +490,11 @@ class PunctuationAnalysis:
         norm_df         = pd.DataFrame(summary).set_index("Label")
         norm_df.columns = ["Question", "Exclamation", "Ellipsis"]
 
-        # ── Plot: grouped bar chart ────────────────────────────────────────────
         fig, ax = plt.subplots(figsize=(10, 5))
         fig.suptitle("Punctuation Usage Normalized by Sentence Length",
                      fontsize=14, fontweight="bold")
 
-        x      = np.arange(len(norm_df.columns))   # 3 punctuation types on x-axis
+        x      = np.arange(len(norm_df.columns))
         labels = norm_df.index.tolist()
         n      = len(labels)
         width  = 0.35
@@ -929,7 +519,7 @@ class PunctuationAnalysis:
         ax.set_ylabel("Avg count per sentence")
         ax.set_xlabel("Punctuation type")
         ax.legend(title="Label")
-        ax.set_ylim(0, norm_df.values.max() * 1.25)   # headroom for value labels
+        ax.set_ylim(0, norm_df.values.max() * 1.25)
 
         return self.helper.save("03_punctuation_normalized.png")
 
@@ -938,15 +528,12 @@ PunctuationAnalysis(cfg, helper).analyse(df)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# GRAPH 3b — Punctuation Table (matplotlib table figure)
+# GRAPH 3b — Punctuation Table
 # ═══════════════════════════════════════════════════════════════════════════════
 class PunctuationTable:
     """
-    Req 3b — The same normalised punctuation data as Graph 3a, but rendered
-    as a colour-coded table for easy tabular comparison.
-
-    Complements the bar chart — readers who prefer numbers over bars can
-    read exact values at a glance.
+    Req 3b — Same normalised punctuation data as Graph 3a rendered as a table.
+    Complements the bar chart for readers who prefer exact numbers.
     """
 
     def __init__(self, cfg: Config, helper: PlotHelper):
@@ -972,7 +559,6 @@ class PunctuationTable:
         norm_df         = pd.DataFrame(summary).set_index("Label")
         norm_df.columns = ["Question", "Exclamation", "Ellipsis"]
 
-        # ── Draw table ────────────────────────────────────────────────────────
         fig, ax = plt.subplots(figsize=(8, 2 + len(norm_df) * 0.6))
         ax.axis("off")
         fig.suptitle("Punctuation Usage Normalized by Sentence Length",
@@ -980,8 +566,7 @@ class PunctuationTable:
 
         # One distinct background colour per label row; data cells are near-white.
         colors_rows = sns.color_palette(self.cfg.PALETTE, len(norm_df))
-        row_colors  = [[c] + ["#f9f9f9"] * len(norm_df.columns)
-                       for c in colors_rows]
+        row_colors  = [[c] + ["#f9f9f9"] * len(norm_df.columns) for c in colors_rows]
 
         table = ax.table(
             cellText    = norm_df.reset_index().values,
@@ -1011,11 +596,8 @@ PunctuationTable(cfg, helper).analyse(df)
 # ═══════════════════════════════════════════════════════════════════════════════
 class WordCloudAnalysis:
     """
-    Req 4 — One word cloud per label, built from the `text_nostop` column
-    (stop-word-free, lemmatised tokens).
-
-    Word clouds give an instant visual summary of the dominant vocabulary
-    in each mental-health category.
+    Req 4 — One word cloud per label using stop-word-free lemmatised tokens.
+    Gives an instant visual summary of dominant vocabulary per mental-health label.
     """
 
     def __init__(self, cfg: Config, helper: PlotHelper):
@@ -1035,7 +617,6 @@ class WordCloudAnalysis:
         cmaps = ["Blues", "Reds", "Greens", "Purples", "Oranges", "YlOrBr"]
 
         for i, label in enumerate(labels):
-            # Join all tokens for this label into a single string for WordCloud.
             text = " ".join(df[df[self.cfg.LABEL_COL] == label]["text_nostop"])
             if not text.strip():
                 axes[i].axis("off")
@@ -1069,11 +650,8 @@ WordCloudAnalysis(cfg, helper).analyse(df)
 # ═══════════════════════════════════════════════════════════════════════════════
 class CoOccurrenceAnalysis:
     """
-    Req 5 — Top word pairs that appear together in the same post, per label.
-    Rendered as a horizontal bar chart.
-
-    Co-occurrence reveals semantic associations (e.g. "anxiety" + "stress")
-    specific to each mental-health label — complementary to word clouds.
+    Req 5 — Top word pairs co-occurring in the same post, per label.
+    Reveals semantic associations (e.g. "anxiety" + "stress") specific to each label.
     """
 
     def __init__(self, cfg: Config, helper: PlotHelper):
@@ -1081,13 +659,10 @@ class CoOccurrenceAnalysis:
         self.helper = helper
 
     def _cooccurrence(self, texts, top_n):
-        """
-        Count how many posts contain each unique word pair (unordered).
-        Uses `combinations` so ("a","b") and ("b","a") are counted as one.
-        """
+        """Count unique word pairs per post. Uses combinations so (a,b) == (b,a)."""
         co = Counter()
         for sentence in texts:
-            words = list(set(sentence.split()))   # set removes duplicates within post
+            words = list(set(sentence.split()))
             for pair in combinations(sorted(words), 2):
                 co[pair] += 1
         return co.most_common(top_n)
@@ -1123,10 +698,6 @@ CoOccurrenceAnalysis(cfg, helper).analyse(df)
 # ═══════════════════════════════════════════════════════════════════════════════
 # GRAPH 6 — Common Words, Bigrams & Trigrams
 # ═══════════════════════════════════════════════════════════════════════════════
-from collections import Counter
-from itertools import islice
-
-
 def get_ngrams(words: list, n: int) -> list:
     """Generate n-grams from a flat list of words using a sliding window."""
     return [" ".join(words[i:i+n]) for i in range(len(words) - n + 1)]
@@ -1134,46 +705,26 @@ def get_ngrams(words: list, n: int) -> list:
 
 class CommonWordsAnalysis:
     """
-    Req 6 — Top N most frequent words, bigrams, and trigrams per label.
-
-    Produces three separate plots (one per n-gram order) so the viewer can
-    compare single-word dominance vs. multi-word phrase patterns across labels.
+    Req 6 — Top N most frequent unigrams, bigrams, and trigrams per label.
+    Three separate plots allow comparison of single-word vs multi-word patterns.
     """
 
     def __init__(self, cfg: Config, helper: PlotHelper):
         self.cfg    = cfg
         self.helper = helper
 
-    def _plot_ngrams(
-        self,
-        df: pd.DataFrame,
-        n: int,
-        title_prefix: str,
-        filename: str,
-    ) -> str:
-        """
-        Internal helper: build a side-by-side bar chart of the top-N n-grams
-        for each label and save it.
-
-        Parameters
-        ----------
-        n            : n-gram order (1 = unigram, 2 = bigram, 3 = trigram).
-        title_prefix : Display prefix shown in the figure title.
-        filename     : Output PNG filename.
-        """
+    def _plot_ngrams(self, df: pd.DataFrame, n: int, title_prefix: str, filename: str) -> str:
+        """Build a side-by-side bar chart of the top-N n-grams for each label."""
         labels = df[self.cfg.LABEL_COL].unique()
         cols   = min(2, len(labels))
         rows   = (len(labels) + cols - 1) // cols
 
         fig, axes = plt.subplots(rows, cols, figsize=(cols * 8, rows * 5))
         axes = np.array(axes).flatten()
-        fig.suptitle(
-            f"Top {self.cfg.TOP_N_WORDS} {title_prefix} per Label",
-            fontsize=14, fontweight="bold",
-        )
+        fig.suptitle(f"Top {self.cfg.TOP_N_WORDS} {title_prefix} per Label",
+                     fontsize=14, fontweight="bold")
 
         for i, label in enumerate(labels):
-            # Flatten all token strings for this label, then compute n-grams.
             words  = " ".join(df[df[self.cfg.LABEL_COL] == label]["text_nostop"]).split()
             ngrams = get_ngrams(words, n)
             freq   = Counter(ngrams).most_common(self.cfg.TOP_N_WORDS)
@@ -1197,23 +748,12 @@ class CommonWordsAnalysis:
     def analyse(self, df: pd.DataFrame) -> list:
         """Produce three plots: unigrams, bigrams, and trigrams."""
         paths = []
-
-        paths.append(self._plot_ngrams(
-            df, n=1,
-            title_prefix="Common Words",
-            filename="06_common_words_per_label.png",
-        ))
-        paths.append(self._plot_ngrams(
-            df, n=2,
-            title_prefix="Bigrams",
-            filename="06_bigrams_per_label.png",
-        ))
-        paths.append(self._plot_ngrams(
-            df, n=3,
-            title_prefix="Trigrams",
-            filename="06_trigrams_per_label.png",
-        ))
-
+        paths.append(self._plot_ngrams(df, n=1, title_prefix="Common Words",
+                                       filename="06_common_words_per_label.png"))
+        paths.append(self._plot_ngrams(df, n=2, title_prefix="Bigrams",
+                                       filename="06_bigrams_per_label.png"))
+        paths.append(self._plot_ngrams(df, n=3, title_prefix="Trigrams",
+                                       filename="06_trigrams_per_label.png"))
         return paths
 
 
@@ -1221,21 +761,131 @@ CommonWordsAnalysis(cfg, helper).analyse(df)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# GRAPH 7 & 8 — Emoji & Emoticon Analysis
+# GRAPH 7 — Category Distribution
+# ═══════════════════════════════════════════════════════════════════════════════
+class CategoryDistribution:
+    """
+    Bar chart + pie chart of the 5 thematic categories.
+    Confirms the French subset is evenly distributed (~20% per category).
+    """
+
+    def __init__(self, cfg: Config, helper: PlotHelper):
+        self.cfg    = cfg
+        self.helper = helper
+
+    def analyse(self, df: pd.DataFrame) -> str:
+        counts = df["category"].value_counts()
+
+        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+        fig.suptitle("Distribution by Mental Health Category", fontsize=14, fontweight="bold")
+
+        sns.barplot(x=counts.values, y=counts.index.astype(str),
+                    palette="Set2", ax=axes[0])
+        axes[0].set_xlabel("Count")
+        axes[0].set_title("Count per Category")
+        for bar, val in zip(axes[0].patches, counts.values):
+            axes[0].text(bar.get_width() + 10, bar.get_y() + bar.get_height() / 2,
+                         str(val), va="center", fontsize=9)
+
+        axes[1].pie(counts.values, labels=counts.index,
+                    autopct="%1.1f%%",
+                    colors=sns.color_palette("Set2", len(counts)),
+                    startangle=140)
+        axes[1].set_title("Proportion per Category")
+
+        return self.helper.save("07_category_distribution.png")
+
+
+CategoryDistribution(cfg, helper).analyse(df)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GRAPH 8 — Category × Label Heatmap
+# ═══════════════════════════════════════════════════════════════════════════════
+class CategoryLabelHeatmap:
+    """
+    Heatmap of category vs mental_state counts.
+    Reveals which thematic categories lean more Healthy or Unhealthy.
+    """
+
+    def __init__(self, cfg: Config, helper: PlotHelper):
+        self.cfg    = cfg
+        self.helper = helper
+
+    def analyse(self, df: pd.DataFrame) -> str:
+        cross = pd.crosstab(df["category"], df[self.cfg.LABEL_COL])
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        sns.heatmap(cross, annot=True, fmt="d", cmap="YlOrRd",
+                    linewidths=0.5, ax=ax)
+        ax.set_title("Category × Mental State Heatmap",
+                     fontsize=13, fontweight="bold")
+        ax.set_xlabel("Mental State")
+        ax.set_ylabel("Category")
+
+        return self.helper.save("08_category_label_heatmap.png")
+
+
+CategoryLabelHeatmap(cfg, helper).analyse(df)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GRAPH 9 — Word Clouds per Category
+# ═══════════════════════════════════════════════════════════════════════════════
+class CategoryWordCloud:
+    """
+    One word cloud per thematic category.
+    Shows which vocabulary is dominant within each mental-health topic area.
+    """
+
+    def __init__(self, cfg: Config, helper: PlotHelper):
+        self.cfg    = cfg
+        self.helper = helper
+
+    def analyse(self, df: pd.DataFrame) -> list:
+        categories = df["category"].unique()
+        n    = len(categories)
+        cols = min(3, n)
+        rows = (n + cols - 1) // cols
+
+        fig, axes = plt.subplots(rows, cols, figsize=(cols * 6, rows * 4))
+        axes = np.array(axes).flatten()
+        fig.suptitle("Word Clouds per Category", fontsize=15, fontweight="bold")
+
+        cmaps = ["Blues", "Reds", "Greens", "Purples", "Oranges"]
+
+        for i, cat in enumerate(categories):
+            text = " ".join(df[df["category"] == cat]["text_nostop"])
+            if not text.strip():
+                axes[i].axis("off")
+                continue
+
+            wc = WordCloud(width=600, height=350, background_color="white",
+                           colormap=cmaps[i % len(cmaps)],
+                           max_words=100, collocations=False).generate(text)
+
+            axes[i].imshow(wc, interpolation="bilinear")
+            axes[i].axis("off")
+            axes[i].set_title(str(cat), fontsize=11, fontweight="bold")
+
+        for j in range(i + 1, len(axes)):
+            axes[j].axis("off")
+
+        path = self.helper.save("09_wordclouds_per_category.png")
+        return [path]
+
+
+CategoryWordCloud(cfg, helper).analyse(df)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GRAPH 10 — Emoji & Emoticon Analysis
 # ═══════════════════════════════════════════════════════════════════════════════
 class EmojiEmoticonAnalysis:
     """
-    Req 7 & 8 — Emoji and emoticon usage analysis.
-
-    Produces a 2×2 figure:
-      Top-left  : Distribution (histogram) of emoji counts per post.
-      Top-right : Distribution (histogram) of emoticon counts per post.
-      Bot-left  : Average emoji count per label (bar chart).
-      Bot-right : Average emoticon count per label (bar chart).
-
-    Emojis and emoticons are strong paralinguistic signals in mental-health
-    social-media text — e.g. unhealthy posts may contain more 😢 or crying
-    emoticons like :'( relative to healthy posts.
+    Req 7 & 8 — Emoji and emoticon usage analysis (2×2 figure).
+    NOTE: Dataset is synthetic/formal — only 23/6000+ posts have emojis,
+    0 have emoticons. Results included for completeness but carry no signal.
     """
 
     def __init__(self, cfg: Config, helper: PlotHelper):
@@ -1244,7 +894,11 @@ class EmojiEmoticonAnalysis:
 
     def analyse(self, df: pd.DataFrame) -> str:
         fig, axes = plt.subplots(2, 2, figsize=(13, 10))
-        fig.suptitle("Emoji & Emoticon Analysis", fontsize=14, fontweight="bold")
+        fig.suptitle(
+            "Emoji & Emoticon Analysis\n"
+            "⚠️ <1% of posts contain emojis — results not statistically meaningful",
+            fontsize=13, fontweight="bold"
+        )
 
         # ── Top-left: emoji count distribution ────────────────────────────────
         axes[0, 0].hist(df["emoji_count"], bins=20, color="#F4A460", edgecolor="white")
@@ -1263,28 +917,22 @@ class EmojiEmoticonAnalysis:
         axes[0, 1].legend()
 
         # ── Bottom-left: average emoji count per label ────────────────────────
-        avg_emoji = (
-            df.groupby(self.cfg.LABEL_COL)["emoji_count"]
-              .mean()
-              .sort_values(ascending=False)
-        )
+        avg_emoji = (df.groupby(self.cfg.LABEL_COL)["emoji_count"]
+                       .mean().sort_values(ascending=False))
         sns.barplot(x=avg_emoji.values, y=avg_emoji.index.astype(str),
                     palette=self.cfg.PALETTE, ax=axes[1, 0])
         axes[1, 0].set_title("Avg Emoji Count by Label")
         axes[1, 0].set_xlabel("Avg emoji count")
 
         # ── Bottom-right: average emoticon count per label ────────────────────
-        avg_emot = (
-            df.groupby(self.cfg.LABEL_COL)["emoticon_count"]
-              .mean()
-              .sort_values(ascending=False)
-        )
+        avg_emot = (df.groupby(self.cfg.LABEL_COL)["emoticon_count"]
+                      .mean().sort_values(ascending=False))
         sns.barplot(x=avg_emot.values, y=avg_emot.index.astype(str),
                     palette=self.cfg.PALETTE, ax=axes[1, 1])
         axes[1, 1].set_title("Avg Emoticon Count by Label")
         axes[1, 1].set_xlabel("Avg emoticon count")
 
-        return self.helper.save("07_08_emoji_emoticon.png")
+        return self.helper.save("10_emoji_emoticon.png")
 
 
 EmojiEmoticonAnalysis(cfg, helper).analyse(df)
