@@ -1,12 +1,9 @@
-# ── Standard library ──────────────────────────────────────────────────────────
 import os
 import re
 import string
 import warnings
 from collections import Counter
 from itertools import combinations
-
-# ── External libraries ────────────────────────────────────────────────────────
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -15,13 +12,11 @@ import seaborn as sns
 from wordcloud import WordCloud
 import spacy
 import emoji
-from typing import List, Tuple, Set, Dict, Optional  # ✅ added Dict, Optional
-from typing import Literal                             # ✅ added Literal
+from typing import List, Tuple, Set, Dict, Optional  
+from typing import Literal                             
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize
 from pydantic import BaseModel, Field
-
-# REMOVED: from your_models import FrenchMentalHealthPost ✅ (defined below)
 
 import nltk
 try:
@@ -45,7 +40,7 @@ class Config:
     LANGUAGE_COL   = "language"
     LANGUAGE_VALUE = "French"
     TEXT_COL       = "text"
-    LABEL_COL      = "mental_state"  # ✅ used consistently
+    LABEL_COL      = "mental_state"  
 
     BG      = "#F9F9F9"
     DPI     = 150
@@ -177,7 +172,7 @@ class TextCleaner:
             r'[\U0001FA70-\U0001FAFF]'
         )
 
-        # ✅ added — used in FeatureExtractor.detect_emoticons
+        
         self.emoticon_patterns: List[str] = [
     r':\)|:-\)|:\]|=\]|=\)',        # happy
     r':\(|:-\(|:\[|=\[|=\(',        # sad
@@ -186,7 +181,7 @@ class TextCleaner:
     r':P|:-P|=P',                    # tongue
     r':o|:-o|:O|:-O',               # surprised
     r':/|:-/',                        # skeptical
-    r":'\(",                          # ✅ fixed — was r":'\\("
+    r":'\(",                          # crying
     r'<3',                           # heart
 ]
 
@@ -234,7 +229,7 @@ class TextCleaner:
         lemmas = self.lemmatize(tokens)
         return self.remove_stopwords(lemmas)
 
-    # ✅ added — called in section 4
+    
     def fit_transform(self, df: pd.DataFrame, text_col: str) -> pd.DataFrame:
      df = df.copy()
      cleaned_results = df[text_col].apply(self.clean_text)
@@ -250,10 +245,10 @@ class TextCleaner:
      df["exclamation_count"]   = df["cleaned_text"].apply(lambda x: x.count('!'))
      df["ellipsis_count"]      = df["cleaned_text"].apply(lambda x: x.count('...'))
 
-       # ✅ needed by WordCloud, CoOccurrence, CommonWords
+       #  needed by WordCloud, CoOccurrence, CommonWords
      df["text_nostop"]       = df["tokens"].apply(lambda tokens: " ".join(tokens))
 
-    # ✅ needed by EmojiEmoticonAnalysis
+    #  needed by EmojiEmoticonAnalysis
      df["emoji_count"]       = df[text_col].apply(
                                   lambda x: len(emoji.emoji_list(x)))
      df["emoticon_count"]    = df[text_col].apply(
@@ -275,7 +270,7 @@ df = cleaner.fit_transform(df_raw, cfg.TEXT_COL)
 df.head(3)
 
 
-## 4. Feature extraction
+## 5. Feature extraction
 class FeatureExtractor:
     def __init__(self, processor: TextCleaner) -> None:
         self.processor = processor
@@ -312,7 +307,7 @@ class FeatureExtractor:
 
     def compute_post_features_from_doc(
         self, original_text: str, cleaned_text: str, doc
-    ) -> FrenchPostAnalysis:  # ✅ was PostAnalysis, now FrenchPostAnalysis
+    ) -> FrenchPostAnalysis:  
         word_count   = sum(1 for token in doc if token.is_alpha)
         char_count   = len(cleaned_text)
         punct_counts = self.count_punctuation(cleaned_text)
@@ -321,7 +316,7 @@ class FeatureExtractor:
         emojis, emoji_count       = self.detect_emojis_combined(original_text)
         emoticons, emoticon_count = self.detect_emoticons(original_text)
 
-        return FrenchPostAnalysis(  # ✅ was PostAnalysis
+        return FrenchPostAnalysis(  
             word_count=word_count, char_count=char_count,
             punct_density=punct_density,
             question_count=punct_counts.get('question_count', 0),
@@ -333,7 +328,7 @@ class FeatureExtractor:
         )
 
 
-## 5. Text analyzer
+## 6. Text analyzer
 class TextAnalyzer:
     def __init__(self, processor: TextCleaner, feature_extractor: FeatureExtractor) -> None:
         self.processor = processor
@@ -352,7 +347,7 @@ class TextAnalyzer:
             lambda text: max(len(sent_tokenize(text)), 1)
         )
         summary_data = []
-        for label in df[cfg.LABEL_COL].unique():  # ✅ was df['status']
+        for label in df[cfg.LABEL_COL].unique():  # 
             label_data   = df[df[cfg.LABEL_COL] == label]
             avg_sent_len = sentence_counts[label_data.index].mean()
             normalized_punct = {}
@@ -386,7 +381,7 @@ class TextAnalyzer:
 
     def compute_shared_vocabulary(self, df: pd.DataFrame) -> Dict[str, Set[str]]:
         label_vocab: Dict[str, Set[str]] = {}
-        for label in df[cfg.LABEL_COL].unique():  # ✅ was df['status']
+        for label in df[cfg.LABEL_COL].unique():  
             label_mask = df[cfg.LABEL_COL] == label
             vocab: Set[str] = set()
             if 'tokens' in df.columns:
@@ -449,7 +444,7 @@ class TextLengthAnalysis:
         labels = df[self.cfg.LABEL_COL].unique()
         colors = sns.color_palette(self.cfg.PALETTE, len(labels))
 
-        # ── Plot 1: One histogram per label ──────────────────────────────────
+        # ── Plot 1: 
         fig, axes = plt.subplots(1, len(labels), figsize=(6 * len(labels), 5))
         fig.suptitle("Word Count Distribution by Label", fontsize=14, fontweight="bold")
 
@@ -468,7 +463,7 @@ class TextLengthAnalysis:
         plt.tight_layout()
         self.helper.save("02a_wordcount_histogram_by_label.png")
 
-        # ── Plot 2: One boxplot per label ─────────────────────────────────────
+        # ── Plot 2: One boxplot 
         fig, axes = plt.subplots(1, len(labels), figsize=(5 * len(labels), 5))
         fig.suptitle("Char Count Distribution by Label", fontsize=14, fontweight="bold")
 
@@ -832,10 +827,3 @@ class EmojiEmoticonAnalysis:
 EmojiEmoticonAnalysis(cfg, helper).analyse(df)
 
 
-# Check a few Healthy posts that contain "dépression"
-mask = (
-    df[cfg.LABEL_COL].str.lower() == "healthy"
-) & (
-    df["text"].str.lower().str.contains("dépression")
-)
-print(df[mask]["text"].head(10).tolist())
