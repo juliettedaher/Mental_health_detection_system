@@ -956,3 +956,15 @@ for f in sorted(saved):
 
 print(f"\n📄 Cleaned CSV : {cfg.OUTPUT_DIR}/french_cleaned.csv")
 print("\n✅ All done!")
+
+# ── Actual emojis found in the dataset ────────────────────────────────────────
+from collections import Counter
+
+all_emojis = []
+for text in df_raw[cfg.TEXT_COL]:  # use df_raw — the original uncleaned text
+    all_emojis.extend([item['emoji'] for item in emoji.emoji_list(str(text))])
+
+emoji_counts = Counter(all_emojis)
+print(f"\n── Emojis found in dataset ({len(emoji_counts)} unique) ──")
+for em, count in emoji_counts.most_common():
+    print(f"   {em}  →  {count} times")
