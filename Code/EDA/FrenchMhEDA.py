@@ -1,3 +1,4 @@
+
 """
 mental_health_EDA.py
 ====================
@@ -33,7 +34,6 @@ import emoji
 from typing import List, Tuple, Set, Dict, Optional
 
 # ── NLP ───────────────────────────────────────────────────────────────────────
-from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize
 
 # ── NLTK resource downloads (silent; failures are non-fatal) ──────────────────
@@ -41,7 +41,6 @@ import nltk
 try:
     nltk.download('punkt',     quiet=True)
     nltk.download('punkt_tab', quiet=True)
-    nltk.download('stopwords', quiet=True)
     nltk.download('wordnet',   quiet=True)
 except Exception as e:
     print(f"Warning: NLTK download failed: {e}")
@@ -57,10 +56,9 @@ class Config:
     """
     Central place for every tuneable constant in the pipeline.
     Changing a value here propagates automatically to every class that
-    receives a `cfg` argument — no hunting for magic strings.
+    receives a cfg argument — no hunting for magic strings.
     """
     CSV_PATH       = r"C:\Users\Admin\Documents\FYP\french dataset\Dataset\french_data.csv"
-    STOPWORDS_FILE = r"french_stpwords.txt"
     OUTPUT_DIR     = r"MyResults"
 
     LANGUAGE_COL   = "language"
@@ -158,14 +156,75 @@ class DataLoader:
 # for speed (NER and dependency parser are not needed here).
 nlp = spacy.load("fr_core_news_sm", disable=["ner", "parser"])
 
-# Combine three stop-word sources for maximum coverage:
-#   1. spaCy's built-in French stop-words
-#   2. NLTK's French stop-words
-#   3. A small custom set of common French social-media filler words
-SPACY_STOPS  = nlp.Defaults.stop_words.copy()
-NLTK_STOPS   = set(stopwords.words("french"))
-CUSTOM_STOPS = {"bonjour", "salut", "svp", "merci", "plait"}
-STOPWORDS    = SPACY_STOPS | NLTK_STOPS | CUSTOM_STOPS
+# pronouns (to remove)
+PRONOUNS = {
+    "je", "j", "tu", "il", "elle", "nous", "vous", "ils", "elles", "on",
+    "me", "moi", "te", "toi", "se",
+    # Possessive determiners
+    "mon", "ma", "mes", "ton", "ta", "tes", "son", "sa", "ses",
+    "notre", "nos", "votre", "vos", "leur", "leurs"
+}
+
+# grammar / structure words
+EXTRA_REMOVE = {
+    # Definite articles
+    "le", "la", "les",
+    # Indefinite articles
+    "un", "une", "des",
+    # Partitive / contracted articles
+    "du", "au", "aux",
+    # Common prepositions
+    "de", "à", "en", "dans", "sur", "avec", "pour", "par", "sans", "chez",
+    # Coordinating conjunctions
+    "et", "ou", "mais", "donc", "or", "ni", "car",
+    # Subordinating conjunctions
+    "que", "qui", "quand", "lorsque", "comme", "puisque", "quoique","quoi", 
+    "si", "afin", "bien", "pendant", "avant", "après", "depuis", "jusqu", "malgré","chaque", "tous", "toutes","tout", "toute", "tous", "toutes",
+    # Demonstrative determiners
+    "ce", "cet", "cette", "ces",
+}
+
+# noise tokens
+NOISE = {"j", "m", "n", "s", "t", "quelqu", "aujourd", "hui","pa"}
+
+# remove state verbs (être + avoir conjugations)
+REMOVE_VERBS = {
+    "être", "avoir",
+    # être — present
+    "suis", "es", "est", "sommes", "êtes", "sont",
+    # être — imperfect
+    "étais", "était", "étions", "étiez", "étaient",
+    # être — future
+    "serai", "seras", "sera", "serons", "serez", "seront",
+    # être — conditional
+    "serais", "serait", "serions", "seriez", "seraient",
+    # être — subjunctive
+    "sois", "soit", "soyons", "soyez", "soient",
+    # avoir — present
+    "ai", "as", "a", "avons", "avez", "ont",
+    # avoir — imperfect
+    "avais", "avait", "avions", "aviez", "avaient",
+    # avoir — future
+    "aurai", "auras", "aura", "aurons", "aurez", "auront",
+    # avoir — conditional
+    "aurais", "aurait", "aurions", "auriez", "auraient",
+    # avoir — subjunctive
+    "aie", "aies", "ait", "ayons", "ayez", "aient",
+    # past participles (used in compound tenses)
+    "été", "eu",
+}
+
+# words to KEEP (protect them from removal)
+KEEP_WORDS = {
+    "ne", "pas", "rien", "personne", "jamais",
+    "plus", "toujours", "parfois", "tellement", "trop",
+    "dépression", "pensées", "vide", "douleur", "désespoir",
+    "espoir", "suicidaires", "lumière", "obscurité", "âme",
+    "résilience", "guérison"
+}
+
+# final stopwords
+STOPWORDS = (PRONOUNS | EXTRA_REMOVE | NOISE | REMOVE_VERBS) - KEEP_WORDS
 
 
 class TextCleaner:
@@ -193,7 +252,7 @@ class TextCleaner:
         self.stopwords_set: Set[str] = STOPWORDS
 
         # Unicode ranges covering the most common emoji blocks.
-        # Used as a fallback after the `emoji` library's own replacement.
+        # Used as a fallback after the emoji library's own replacement.
         self.emoji_regex = (
             r'[\U0001F600-\U0001F64F]|'   # emoticons
             r'[\U0001F300-\U0001F5FF]|'   # symbols & pictographs
@@ -221,7 +280,7 @@ class TextCleaner:
     # ── Low-level cleaning helpers ────────────────────────────────────────────
 
     def remove_emojis(self, text: str) -> str:
-        """Strip emojis using the `emoji` library first, then regex as a safety net."""
+        """Strip emojis using the emoji library first, then regex as a safety net."""
         text_no_emoji = emoji.replace_emoji(text, replace="")
         return re.sub(self.emoji_regex, "", text_no_emoji)
 
@@ -305,7 +364,7 @@ class TextCleaner:
 
         # ── Step 3: surface-level text statistics ─────────────────────────────
         df["char_count"]          = df["cleaned_text"].apply(len)
-        df["word_count"]          = df["cleaned_text"].apply(lambda x: len(x.split()))
+        df["text_length"]          = df["cleaned_text"].apply(lambda x: len(x.split()))
         df["punct_count"]         = df["cleaned_text"].apply(
             lambda x: x.count('?') + x.count('!') + x.count('...')
         )
@@ -347,16 +406,10 @@ print(f"Posts with any emoticon: {(df['emoticon_count'] > 0).sum()}")
 
 df.head(3)
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # GRAPH 1 — Label Distribution
 # ═══════════════════════════════════════════════════════════════════════════════
 class LabelDistribution:
-    """
-    Req 1 — Bar chart + pie chart of label counts.
-    Most important sanity check: confirms whether Healthy/Unhealthy classes are balanced.
-    """
-
     def __init__(self, cfg: Config, helper: PlotHelper):
         self.cfg    = cfg
         self.helper = helper
@@ -367,7 +420,6 @@ class LabelDistribution:
         fig, axes = plt.subplots(1, 2, figsize=(13, 5))
         fig.suptitle("Label Distribution — mental_state", fontsize=14, fontweight="bold")
 
-        # ── Left: horizontal bar chart with value annotations ──────────────────
         sns.barplot(x=counts.values, y=counts.index.astype(str),
                     palette=self.cfg.PALETTE, ax=axes[0])
         axes[0].set_xlabel("Count")
@@ -379,11 +431,18 @@ class LabelDistribution:
                 str(val), va="center", fontsize=9,
             )
 
-        # ── Right: pie chart showing class proportions ─────────────────────────
+        # ── Pie with both count AND percentage ────────────────────────────────
+        def make_autopct(values):
+            def autopct(pct):
+                total = sum(values)
+                count = int(round(pct * total / 100.0))
+                return f"{pct:.1f}%\n(n={count})"
+            return autopct
+
         axes[1].pie(
             counts.values,
             labels=counts.index,
-            autopct="%1.1f%%",
+            autopct=make_autopct(counts.values),
             colors=sns.color_palette(self.cfg.PALETTE, len(counts)),
             startangle=140,
         )
@@ -394,76 +453,142 @@ class LabelDistribution:
 
 LabelDistribution(cfg, helper).analyse(df)
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# GRAPH 2 — Text Length Analysis
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── GRAPH 2 — Text Length Analysis ────────────────────────────────────────────
 class TextLengthAnalysis:
-    """
-    Req 2 — Word-count histograms and character-count boxplots, one subplot per label.
-    Detects if one mental-health label correlates with longer/shorter posts.
-    """
-
     def __init__(self, cfg: Config, helper: PlotHelper):
-        self.cfg    = cfg
+        self.cfg = cfg
         self.helper = helper
 
     def analyse(self, df: pd.DataFrame) -> None:
         labels = df[self.cfg.LABEL_COL].unique()
         colors = sns.color_palette(self.cfg.PALETTE, len(labels))
 
-        # ── Plot 2a: word-count histogram per label ────────────────────────────
         fig, axes = plt.subplots(1, len(labels), figsize=(6 * len(labels), 5))
-        fig.suptitle("Word Count Distribution by Label", fontsize=14, fontweight="bold")
+        fig.suptitle("Text Length Distribution by Label", fontsize=14, fontweight="bold")
+
+        # Fix if only one label
+        if len(labels) == 1:
+            axes = [axes]
 
         for ax, label, color in zip(axes, labels, colors):
-            subset = df[df[self.cfg.LABEL_COL] == label]["word_count"]
-            median = subset.median()
-            ax.hist(subset, bins=30, color=color, edgecolor="white", alpha=0.85)
-            ax.axvline(median, color="navy", linestyle="--", linewidth=1.5,
-                       label=f"Median: {median:.0f}")
-            ax.set_title(f"Word Count — {label}")
-            ax.set_xlabel("Word Count")
+            subset = df[df[self.cfg.LABEL_COL] == label]["text_length"]
+
+            # ── Histogram ─────────────────────────────
+            counts, bins, patches = ax.hist(
+                subset,
+                bins=30,
+                color=color,
+                edgecolor="white",
+                alpha=0.85
+            )
+
+            # ── Add values on bars ────────────────────
+            for count, patch in zip(counts, patches):
+                if count > 0:
+                    ax.text(
+                        patch.get_x() + patch.get_width() / 2,
+                        patch.get_height() + max(counts) * 0.01,
+                        f"{int(count)}",
+                        ha="center",
+                        va="bottom",
+                        fontsize=8
+                    )
+
+            # ── Labels & title ────────────────────────
+            ax.set_title(f"{label}", fontsize=11, fontweight="bold")
+            ax.set_xlabel("Text Length")
             ax.set_ylabel("Frequency")
-            ax.legend()
 
         plt.tight_layout()
-        self.helper.save("02a_wordcount_histogram_by_label.png")
+        self.helper.save("02a_textlength_histogram_by_label.png")
 
-        # ── Plot 2b: character-count boxplot per label ─────────────────────────
+        # ── Plot 2b: Boxplot ───────────────────────────────────────────────
         fig, axes = plt.subplots(1, len(labels), figsize=(5 * len(labels), 5))
-        fig.suptitle("Char Count Distribution by Label", fontsize=14, fontweight="bold")
+        fig.suptitle("Text Length Boxplot by Label", fontsize=14, fontweight="bold")
 
         for ax, label, color in zip(axes, labels, colors):
-            subset = df[df[self.cfg.LABEL_COL] == label]["char_count"]
+            subset = df[df[self.cfg.LABEL_COL] == label]["text_length"]
+
             ax.boxplot(
-                subset, patch_artist=True,
+                subset,
+                patch_artist=True,
                 boxprops=dict(facecolor=color, color="gray"),
                 medianprops=dict(color="black", linewidth=2),
                 flierprops=dict(marker='o', markersize=3,
                                 markerfacecolor=color, alpha=0.4),
             )
+
+            mn = subset.min()
+            q1 = subset.quantile(0.25)
+            median = subset.median()
+            mean = subset.mean()
+            q3 = subset.quantile(0.75)
+            mx = subset.max()
+
+            for val, lbl, offset in [
+                (mn, f"Min: {mn:.0f}", -0.32),
+                (q1, f"Q1: {q1:.0f}", 0.32),
+                (median, f"Median: {median:.0f}", 0.32),
+                (mean, f"Mean: {mean:.0f}", -0.32),
+                (q3, f"Q3: {q3:.0f}", 0.32),
+                (mx, f"Max: {mx:.0f}", -0.32),
+            ]:
+                ax.text(1 + offset, val, lbl, ha="center", va="center", fontsize=8)
+
+            ax.set_title(f"Text Length — {label}")
+            ax.set_ylabel("Text Length")
+            ax.set_xticks([])
+
+        plt.tight_layout()
+        self.helper.save("02b_textlength_boxplot_by_label.png")
+
+        # ── Plot 2c: Char Count Boxplot ────────────────────────────────────
+        fig, axes = plt.subplots(1, len(labels), figsize=(5 * len(labels), 5))
+        fig.suptitle("Char Count Distribution by Label", fontsize=14, fontweight="bold")
+
+        for ax, label, color in zip(axes, labels, colors):
+            subset = df[df[self.cfg.LABEL_COL] == label]["char_count"]
+
+            ax.boxplot(
+                subset,
+                patch_artist=True,
+                boxprops=dict(facecolor=color, color="gray"),
+                medianprops=dict(color="black", linewidth=2),
+                flierprops=dict(marker='o', markersize=3,
+                                markerfacecolor=color, alpha=0.4),
+            )
+
+            mn = subset.min()
+            q1 = subset.quantile(0.25)
+            median = subset.median()
+            mean = subset.mean()
+            q3 = subset.quantile(0.75)
+            mx = subset.max()
+
+            for val, lbl, offset in [
+                (mn, f"Min: {mn:.0f}", -0.32),
+                (q1, f"Q1: {q1:.0f}", 0.32),
+                (median, f"Median: {median:.0f}", 0.32),
+                (mean, f"Mean: {mean:.0f}", -0.32),
+                (q3, f"Q3: {q3:.0f}", 0.32),
+                (mx, f"Max: {mx:.0f}", -0.32),
+            ]:
+                ax.text(1 + offset, val, lbl, ha="center", va="center", fontsize=8)
+
             ax.set_title(f"Char Count — {label}")
-            ax.set_xlabel(label)
             ax.set_ylabel("Char Count")
             ax.set_xticks([])
 
         plt.tight_layout()
-        self.helper.save("02b_charcount_boxplot_by_label.png")
+        self.helper.save("02c_charcount_boxplot_by_label.png")
+
 
 
 TextLengthAnalysis(cfg, helper).analyse(df)
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
-# GRAPH 3a — Punctuation Analysis (grouped bar chart)
+# GRAPH 3a — Punctuation Analysis
 # ═══════════════════════════════════════════════════════════════════════════════
 class PunctuationAnalysis:
-    """
-    Req 3 — Normalised punctuation usage as a grouped bar chart.
-    Counts are divided by avg sentence count per label to allow fair comparison.
-    """
-
     def __init__(self, cfg: Config, helper: PlotHelper):
         self.cfg    = cfg
         self.helper = helper
@@ -471,12 +596,10 @@ class PunctuationAnalysis:
     def analyse(self, df: pd.DataFrame) -> str:
         punct_cols = ['question_count', 'exclamation_count', 'ellipsis_count']
 
-        # Sentence count per post (at least 1 to avoid division by zero).
         sentence_counts = df['cleaned_text'].apply(
             lambda t: max(len(sent_tokenize(t)), 1)
         )
 
-        # Build per-label normalised punctuation summary.
         summary = []
         for label in df[self.cfg.LABEL_COL].unique():
             mask      = df[self.cfg.LABEL_COL] == label
@@ -505,7 +628,6 @@ class PunctuationAnalysis:
             bars   = ax.bar(x + offset, norm_df.loc[label],
                             width=width, label=label,
                             color=color, edgecolor="white")
-            # Annotate each bar with its exact value.
             for bar in bars:
                 ax.text(
                     bar.get_x() + bar.get_width() / 2,
@@ -528,14 +650,9 @@ PunctuationAnalysis(cfg, helper).analyse(df)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# GRAPH 3b — Punctuation Table
+# GRAPH 3b — Punctuation Table  (unchanged — already shows exact numbers)
 # ═══════════════════════════════════════════════════════════════════════════════
 class PunctuationTable:
-    """
-    Req 3b — Same normalised punctuation data as Graph 3a rendered as a table.
-    Complements the bar chart for readers who prefer exact numbers.
-    """
-
     def __init__(self, cfg: Config, helper: PlotHelper):
         self.cfg    = cfg
         self.helper = helper
@@ -564,7 +681,6 @@ class PunctuationTable:
         fig.suptitle("Punctuation Usage Normalized by Sentence Length",
                      fontsize=13, fontweight="bold", y=1.02)
 
-        # One distinct background colour per label row; data cells are near-white.
         colors_rows = sns.color_palette(self.cfg.PALETTE, len(norm_df))
         row_colors  = [[c] + ["#f9f9f9"] * len(norm_df.columns) for c in colors_rows]
 
@@ -580,7 +696,6 @@ class PunctuationTable:
         table.set_fontsize(11)
         table.scale(1.3, 2)
 
-        # Style the header row: bold white text on dark blue background.
         for j in range(len(norm_df.columns) + 1):
             table[0, j].set_text_props(fontweight="bold", color="white")
             table[0, j].set_facecolor("#4C72B0")
@@ -645,21 +760,17 @@ class WordCloudAnalysis:
 WordCloudAnalysis(cfg, helper).analyse(df)
 
 
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # GRAPH 5 — Co-occurrence Analysis
 # ═══════════════════════════════════════════════════════════════════════════════
 class CoOccurrenceAnalysis:
-    """
-    Req 5 — Top word pairs co-occurring in the same post, per label.
-    Reveals semantic associations (e.g. "anxiety" + "stress") specific to each label.
-    """
-
     def __init__(self, cfg: Config, helper: PlotHelper):
         self.cfg    = cfg
         self.helper = helper
 
     def _cooccurrence(self, texts, top_n):
-        """Count unique word pairs per post. Uses combinations so (a,b) == (b,a)."""
         co = Counter()
         for sentence in texts:
             words = list(set(sentence.split()))
@@ -681,10 +792,19 @@ class CoOccurrenceAnalysis:
             counts      = [c for _, c in pairs]
 
             fig, ax = plt.subplots(figsize=(10, 6))
-            sns.barplot(x=counts, y=pair_labels, palette="mako", ax=ax)
+            bars = sns.barplot(x=counts, y=pair_labels, palette="mako", ax=ax)
             ax.set_title(f"Top Word Co-occurrences — {label}",
                          fontsize=13, fontweight="bold")
             ax.set_xlabel("Co-occurrence count")
+
+            # Annotate every bar with its exact count
+            for bar, val in zip(ax.patches, counts):
+                ax.text(
+                    bar.get_width() + max(counts) * 0.01,
+                    bar.get_y() + bar.get_height() / 2,
+                    str(val), va="center", fontsize=9,
+                )
+            ax.set_xlim(0, max(counts) * 1.12)
 
             fname = f"05_cooccurrence_{self.helper.safe_name(label)}.png"
             paths.append(self.helper.save(fname))
@@ -694,50 +814,79 @@ class CoOccurrenceAnalysis:
 
 CoOccurrenceAnalysis(cfg, helper).analyse(df)
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# GRAPH 6 — Common Words, Bigrams & Trigrams
-# ═══════════════════════════════════════════════════════════════════════════════
-def get_ngrams(words: list, n: int) -> list:
-    """Generate n-grams from a flat list of words using a sliding window."""
-    return [" ".join(words[i:i+n]) for i in range(len(words) - n + 1)]
+from sklearn.feature_extraction.text import CountVectorizer
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 class CommonWordsAnalysis:
-    """
-    Req 6 — Top N most frequent unigrams, bigrams, and trigrams per label.
-    Three separate plots allow comparison of single-word vs multi-word patterns.
-    """
-
     def __init__(self, cfg: Config, helper: PlotHelper):
-        self.cfg    = cfg
+        self.cfg = cfg
         self.helper = helper
 
+    def _get_ngram_freq(self, texts, n):
+        vectorizer = CountVectorizer(
+            ngram_range=(n, n),
+            min_df=2,          # ignore rare noise
+            max_df=0.95        # ignore overly common words
+        )
+
+        X = vectorizer.fit_transform(texts)
+        freqs = X.toarray().sum(axis=0)
+
+        df = pd.DataFrame({
+            "ngram": vectorizer.get_feature_names_out(),
+            "count": freqs
+        })
+
+        return df.sort_values("count", ascending=False).head(self.cfg.TOP_N_WORDS)
+
     def _plot_ngrams(self, df: pd.DataFrame, n: int, title_prefix: str, filename: str) -> str:
-        """Build a side-by-side bar chart of the top-N n-grams for each label."""
         labels = df[self.cfg.LABEL_COL].unique()
-        cols   = min(2, len(labels))
-        rows   = (len(labels) + cols - 1) // cols
+        cols = min(2, len(labels))
+        rows = (len(labels) + cols - 1) // cols
 
         fig, axes = plt.subplots(rows, cols, figsize=(cols * 8, rows * 5))
         axes = np.array(axes).flatten()
+
         fig.suptitle(f"Top {self.cfg.TOP_N_WORDS} {title_prefix} per Label",
                      fontsize=14, fontweight="bold")
 
         for i, label in enumerate(labels):
-            words  = " ".join(df[df[self.cfg.LABEL_COL] == label]["text_nostop"]).split()
-            ngrams = get_ngrams(words, n)
-            freq   = Counter(ngrams).most_common(self.cfg.TOP_N_WORDS)
 
-            if not freq:
+            texts = df[df[self.cfg.LABEL_COL] == label]["text_nostop"].dropna().astype(str)
+
+            top_ngrams = self._get_ngram_freq(texts, n)
+
+            if top_ngrams.empty:
                 axes[i].axis("off")
                 continue
 
-            w, c = zip(*freq)
-            sns.barplot(x=list(c), y=list(w), palette="rocket", ax=axes[i])
+            sns.barplot(
+                data=top_ngrams,
+                x="count",
+                y="ngram",
+                palette="rocket",
+                ax=axes[i]
+            )
+
             axes[i].set_title(str(label), fontsize=11, fontweight="bold")
             axes[i].set_xlabel("Frequency")
             axes[i].set_ylabel("")
+
+            # annotations
+            for bar, val in zip(axes[i].patches, top_ngrams["count"]):
+                axes[i].text(
+                    bar.get_width() + max(top_ngrams["count"]) * 0.01,
+                    bar.get_y() + bar.get_height() / 2,
+                    str(val),
+                    va="center",
+                    fontsize=8,
+                )
+
+            axes[i].set_xlim(0, max(top_ngrams["count"]) * 1.12)
 
         for j in range(i + 1, len(axes)):
             axes[j].axis("off")
@@ -746,16 +895,11 @@ class CommonWordsAnalysis:
         return self.helper.save(filename)
 
     def analyse(self, df: pd.DataFrame) -> list:
-        """Produce three plots: unigrams, bigrams, and trigrams."""
-        paths = []
-        paths.append(self._plot_ngrams(df, n=1, title_prefix="Common Words",
-                                       filename="06_common_words_per_label.png"))
-        paths.append(self._plot_ngrams(df, n=2, title_prefix="Bigrams",
-                                       filename="06_bigrams_per_label.png"))
-        paths.append(self._plot_ngrams(df, n=3, title_prefix="Trigrams",
-                                       filename="06_trigrams_per_label.png"))
-        return paths
-
+        return [
+            self._plot_ngrams(df, 1, "Common Words", "06_common_words_per_label.png"),
+            self._plot_ngrams(df, 2, "Bigrams", "06_bigrams_per_label.png"),
+            self._plot_ngrams(df, 3, "Trigrams", "06_trigrams_per_label.png"),
+        ]
 
 CommonWordsAnalysis(cfg, helper).analyse(df)
 
@@ -764,11 +908,6 @@ CommonWordsAnalysis(cfg, helper).analyse(df)
 # GRAPH 7 — Category Distribution
 # ═══════════════════════════════════════════════════════════════════════════════
 class CategoryDistribution:
-    """
-    Bar chart + pie chart of the 5 thematic categories.
-    Confirms the French subset is evenly distributed (~20% per category).
-    """
-
     def __init__(self, cfg: Config, helper: PlotHelper):
         self.cfg    = cfg
         self.helper = helper
@@ -787,8 +926,16 @@ class CategoryDistribution:
             axes[0].text(bar.get_width() + 10, bar.get_y() + bar.get_height() / 2,
                          str(val), va="center", fontsize=9)
 
+        # ── Pie with both count AND percentage ────────────────────────────────
+        def make_autopct(values):
+            def autopct(pct):
+                total = sum(values)
+                count = int(round(pct * total / 100.0))
+                return f"{pct:.1f}%\n(n={count})"
+            return autopct
+
         axes[1].pie(counts.values, labels=counts.index,
-                    autopct="%1.1f%%",
+                    autopct=make_autopct(counts.values),
                     colors=sns.color_palette("Set2", len(counts)),
                     startangle=140)
         axes[1].set_title("Proportion per Category")
@@ -800,14 +947,9 @@ CategoryDistribution(cfg, helper).analyse(df)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# GRAPH 8 — Category × Label Heatmap
+# GRAPH 8 — Category × Label Heatmap  (annot=True already shows exact counts)
 # ═══════════════════════════════════════════════════════════════════════════════
 class CategoryLabelHeatmap:
-    """
-    Heatmap of category vs mental_state counts.
-    Reveals which thematic categories lean more Healthy or Unhealthy.
-    """
-
     def __init__(self, cfg: Config, helper: PlotHelper):
         self.cfg    = cfg
         self.helper = helper
@@ -815,9 +957,14 @@ class CategoryLabelHeatmap:
     def analyse(self, df: pd.DataFrame) -> str:
         cross = pd.crosstab(df["category"], df[self.cfg.LABEL_COL])
 
-        fig, ax = plt.subplots(figsize=(8, 6))
+        # Add row and column totals for full context
+        cross.loc["Total"] = cross.sum()
+        cross["Total"]     = cross.sum(axis=1)
+
+        fig, ax = plt.subplots(figsize=(9, 7))
         sns.heatmap(cross, annot=True, fmt="d", cmap="YlOrRd",
-                    linewidths=0.5, ax=ax)
+                    linewidths=0.5, ax=ax,
+                    annot_kws={"size": 11, "weight": "bold"})
         ax.set_title("Category × Mental State Heatmap",
                      fontsize=13, fontweight="bold")
         ax.set_xlabel("Mental State")
@@ -830,64 +977,9 @@ CategoryLabelHeatmap(cfg, helper).analyse(df)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# GRAPH 9 — Word Clouds per Category
-# ═══════════════════════════════════════════════════════════════════════════════
-class CategoryWordCloud:
-    """
-    One word cloud per thematic category.
-    Shows which vocabulary is dominant within each mental-health topic area.
-    """
-
-    def __init__(self, cfg: Config, helper: PlotHelper):
-        self.cfg    = cfg
-        self.helper = helper
-
-    def analyse(self, df: pd.DataFrame) -> list:
-        categories = df["category"].unique()
-        n    = len(categories)
-        cols = min(3, n)
-        rows = (n + cols - 1) // cols
-
-        fig, axes = plt.subplots(rows, cols, figsize=(cols * 6, rows * 4))
-        axes = np.array(axes).flatten()
-        fig.suptitle("Word Clouds per Category", fontsize=15, fontweight="bold")
-
-        cmaps = ["Blues", "Reds", "Greens", "Purples", "Oranges"]
-
-        for i, cat in enumerate(categories):
-            text = " ".join(df[df["category"] == cat]["text_nostop"])
-            if not text.strip():
-                axes[i].axis("off")
-                continue
-
-            wc = WordCloud(width=600, height=350, background_color="white",
-                           colormap=cmaps[i % len(cmaps)],
-                           max_words=100, collocations=False).generate(text)
-
-            axes[i].imshow(wc, interpolation="bilinear")
-            axes[i].axis("off")
-            axes[i].set_title(str(cat), fontsize=11, fontweight="bold")
-
-        for j in range(i + 1, len(axes)):
-            axes[j].axis("off")
-
-        path = self.helper.save("09_wordclouds_per_category.png")
-        return [path]
-
-
-CategoryWordCloud(cfg, helper).analyse(df)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # GRAPH 10 — Emoji & Emoticon Analysis
 # ═══════════════════════════════════════════════════════════════════════════════
 class EmojiEmoticonAnalysis:
-    """
-    Req 7 & 8 — Emoji and emoticon usage analysis (2×2 figure).
-    NOTE: Dataset is synthetic/formal — only 23/6000+ posts have emojis,
-    0 have emoticons. Results included for completeness but carry no signal.
-    """
-
     def __init__(self, cfg: Config, helper: PlotHelper):
         self.cfg    = cfg
         self.helper = helper
@@ -900,43 +992,53 @@ class EmojiEmoticonAnalysis:
             fontsize=13, fontweight="bold"
         )
 
-        # ── Top-left: emoji count distribution ────────────────────────────────
-        axes[0, 0].hist(df["emoji_count"], bins=20, color="#F4A460", edgecolor="white")
-        axes[0, 0].axvline(df["emoji_count"].mean(), color="red", linestyle="--",
-                           label=f"Mean={df['emoji_count'].mean():.2f}")
-        axes[0, 0].set_title("Emoji Count Distribution")
-        axes[0, 0].set_xlabel("Emojis per text")
-        axes[0, 0].legend()
+        # ── Top-left: emoji count distribution with mean + median annotated ───
+        for col, ax, color, title, xlabel in [
+            ("emoji_count",    axes[0, 0], "#F4A460", "Emoji Count Distribution",    "Emojis per text"),
+            ("emoticon_count", axes[0, 1], "#87CEEB", "Emoticon Count Distribution", "Emoticons per text"),
+        ]:
+            ax.hist(df[col], bins=20, color=color, edgecolor="white")
+            mean   = df[col].mean()
+            median = df[col].median()
+            ax.axvline(mean,   color="red",  linestyle="--", label=f"Mean={mean:.4f}")
+            ax.axvline(median, color="navy", linestyle=":",  label=f"Median={median:.4f}")
+            ax.set_title(title)
+            ax.set_xlabel(xlabel)
+            ax.legend()
 
-        # ── Top-right: emoticon count distribution ─────────────────────────────
-        axes[0, 1].hist(df["emoticon_count"], bins=20, color="#87CEEB", edgecolor="white")
-        axes[0, 1].axvline(df["emoticon_count"].mean(), color="red", linestyle="--",
-                           label=f"Mean={df['emoticon_count'].mean():.2f}")
-        axes[0, 1].set_title("Emoticon Count Distribution")
-        axes[0, 1].set_xlabel("Emoticons per text")
-        axes[0, 1].legend()
+            # Annotate bar heights
+            for patch in ax.patches:
+                h = patch.get_height()
+                if h > 0:
+                    ax.text(
+                        patch.get_x() + patch.get_width() / 2,
+                        h + 0.5, str(int(h)),
+                        ha="center", va="bottom", fontsize=8,
+                    )
 
-        # ── Bottom-left: average emoji count per label ────────────────────────
-        avg_emoji = (df.groupby(self.cfg.LABEL_COL)["emoji_count"]
-                       .mean().sort_values(ascending=False))
-        sns.barplot(x=avg_emoji.values, y=avg_emoji.index.astype(str),
-                    palette=self.cfg.PALETTE, ax=axes[1, 0])
-        axes[1, 0].set_title("Avg Emoji Count by Label")
-        axes[1, 0].set_xlabel("Avg emoji count")
+        # ── Bottom row: avg per label with exact values ───────────────────────
+        for col, ax, title in [
+            ("emoji_count",    axes[1, 0], "Avg Emoji Count by Label"),
+            ("emoticon_count", axes[1, 1], "Avg Emoticon Count by Label"),
+        ]:
+            avg = df.groupby(self.cfg.LABEL_COL)[col].mean().sort_values(ascending=False)
+            sns.barplot(x=avg.values, y=avg.index.astype(str),
+                        palette=self.cfg.PALETTE, ax=ax)
+            ax.set_title(title)
+            ax.set_xlabel("Avg count")
+            for bar, val in zip(ax.patches, avg.values):
+                ax.text(
+                    bar.get_width() + avg.values.max() * 0.01,
+                    bar.get_y() + bar.get_height() / 2,
+                    f"{val:.4f}", va="center", fontsize=9,
+                )
+            ax.set_xlim(0, avg.values.max() * 1.15)
 
-        # ── Bottom-right: average emoticon count per label ────────────────────
-        avg_emot = (df.groupby(self.cfg.LABEL_COL)["emoticon_count"]
-                      .mean().sort_values(ascending=False))
-        sns.barplot(x=avg_emot.values, y=avg_emot.index.astype(str),
-                    palette=self.cfg.PALETTE, ax=axes[1, 1])
-        axes[1, 1].set_title("Avg Emoticon Count by Label")
-        axes[1, 1].set_xlabel("Avg emoticon count")
-
+        plt.tight_layout()
         return self.helper.save("10_emoji_emoticon.png")
 
 
 EmojiEmoticonAnalysis(cfg, helper).analyse(df)
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FINAL SUMMARY
