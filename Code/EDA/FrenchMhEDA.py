@@ -278,10 +278,11 @@ class TextCleaner:
         ]
 
     # ── Low-level cleaning helpers ────────────────────────────────────────────
-
+    
     def remove_emojis(self, text: str) -> str:
-        """Strip all emojis using the emoji library (handles all known sequences)."""
-        return emoji.replace_emoji(text, replace="")
+        text = emoji.replace_emoji(text, replace="")
+        text = re.sub(self.emoji_regex, "", text)  # catches any survivors
+        return text
 
     def replace_urls(self, text: str) -> str:
         """Replace HTTP/HTTPS URLs and bare www. links with the token ' URL '."""
@@ -334,7 +335,8 @@ class TextCleaner:
         text = self.replace_urls(text)
         text = self.replace_mentions(text)
         hashtags, text = self.extract_hashtags(text)
-        text = re.sub(r"[^\w\s!?\-']", "", text, flags=re.ASCII)
+        text = re.sub(r"[^\w\s!?\-']", "", text)
+        text = self.remove_emojis(text)            
         text = re.sub(r"\s+", " ", text).strip()
         return text, hashtags
 
@@ -1075,7 +1077,7 @@ for em, count in emoji_counts.most_common():
 
 all_emojis = []
 
-for text in df["cleaned_text"]:  # <-- cleaned dataset
+for text in df["cleaned_text"]:  
     all_emojis.extend([item['emoji'] for item in emoji.emoji_list(str(text))])
 
 emoji_counts = Counter(all_emojis)
