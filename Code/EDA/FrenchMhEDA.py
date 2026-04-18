@@ -280,9 +280,8 @@ class TextCleaner:
     # ── Low-level cleaning helpers ────────────────────────────────────────────
 
     def remove_emojis(self, text: str) -> str:
-        """Strip emojis using the emoji library first, then regex as a safety net."""
-        text_no_emoji = emoji.replace_emoji(text, replace="")
-        return re.sub(self.emoji_regex, "", text_no_emoji)
+        """Strip all emojis using the emoji library (handles all known sequences)."""
+        return emoji.replace_emoji(text, replace="")
 
     def replace_urls(self, text: str) -> str:
         """Replace HTTP/HTTPS URLs and bare www. links with the token ' URL '."""
@@ -335,7 +334,7 @@ class TextCleaner:
         text = self.replace_urls(text)
         text = self.replace_mentions(text)
         hashtags, text = self.extract_hashtags(text)
-        text = re.sub(r"[^\w\s!?\-']", "", text)
+        text = re.sub(r"[^\w\s!?\-']", "", text, flags=re.ASCII)
         text = re.sub(r"\s+", " ", text).strip()
         return text, hashtags
 
@@ -1060,7 +1059,7 @@ print(f"\n📄 Cleaned CSV : {cfg.OUTPUT_DIR}/french_cleaned.csv")
 print("\n✅ All done!")
 
 # ── Actual emojis found in the dataset ────────────────────────────────────────
-from collections import Counter
+"""from collections import Counter
 
 all_emojis = []
 for text in df_raw[cfg.TEXT_COL]:  # use df_raw — the original uncleaned text
@@ -1068,5 +1067,19 @@ for text in df_raw[cfg.TEXT_COL]:  # use df_raw — the original uncleaned text
 
 emoji_counts = Counter(all_emojis)
 print(f"\n── Emojis found in dataset ({len(emoji_counts)} unique) ──")
+for em, count in emoji_counts.most_common():
+    print(f"   {em}  →  {count} times")"""
+
+
+
+
+all_emojis = []
+
+for text in df["cleaned_text"]:  # <-- cleaned dataset
+    all_emojis.extend([item['emoji'] for item in emoji.emoji_list(str(text))])
+
+emoji_counts = Counter(all_emojis)
+
+print(f"\n── Emojis found in CLEANED dataset ({len(emoji_counts)} unique) ──")
 for em, count in emoji_counts.most_common():
     print(f"   {em}  →  {count} times")
