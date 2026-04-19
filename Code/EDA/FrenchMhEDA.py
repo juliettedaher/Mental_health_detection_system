@@ -1,4 +1,3 @@
-
 """
 mental_health_EDA.py
 ====================
@@ -84,20 +83,15 @@ print(f"Config ready — output folder: '{cfg.OUTPUT_DIR}'")
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1. PLOT HELPER
 # ═══════════════════════════════════════════════════════════════════════════════
-# PlotHelper centralises all figure-saving logic in one place.
-# Its constructor applies a shared visual style (background, spines, font) to every plot globally.
-# save() chains tight_layout → savefig → close → print, eliminating repeated code across 11+ classes.
-# safe_name() sanitises label strings (e.g. "Self-Reflection/Growth") into OS-safe filenames.
 class PlotHelper:
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        # Apply a shared visual style to every figure created after this point.
         plt.rcParams.update({
             "figure.facecolor" : cfg.BG,
             "axes.facecolor"   : cfg.BG,
-            "axes.spines.top"  : False,   # remove top border (cleaner look)
-            "axes.spines.right": False,   # remove right border
+            "axes.spines.top"  : False,
+            "axes.spines.right": False,
             "font.size"        : 11,
         })
 
@@ -126,7 +120,6 @@ print("PlotHelper ready")
 class DataLoader:
     """
     Loads the raw CSV and returns only the French-language rows.
-    Uses cfg so the source path and filter value can be changed in one place.
     """
 
     def __init__(self, cfg: Config):
@@ -134,11 +127,9 @@ class DataLoader:
 
     def load(self) -> pd.DataFrame:
         """Read the CSV (UTF-8 with BOM), filter to French rows, reset index."""
-        # encoding="utf-8-sig" strips the BOM byte that Excel often adds.
         df = pd.read_csv(self.cfg.CSV_PATH, encoding="utf-8-sig")
         print(f"[DataLoader] Total rows loaded : {len(df)}")
 
-        # Keep only rows whose language column matches LANGUAGE_VALUE (case-insensitive).
         mask = (
             df[self.cfg.LANGUAGE_COL].str.strip().str.lower()
             == self.cfg.LANGUAGE_VALUE.lower()
@@ -152,69 +143,44 @@ class DataLoader:
 # 3. TEXT CLEANER
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Load the French spaCy model once at module level; disable unused components
-# for speed (NER and dependency parser are not needed here).
 nlp = spacy.load("fr_core_news_sm", disable=["ner", "parser"])
 
-# pronouns (to remove)
 PRONOUNS = {
     "je", "j", "tu", "il", "elle", "nous", "vous", "ils", "elles", "on",
     "me", "moi", "te", "toi", "se",
-    # Possessive determiners
     "mon", "ma", "mes", "ton", "ta", "tes", "son", "sa", "ses",
     "notre", "nos", "votre", "vos", "leur", "leurs"
 }
 
-# grammar / structure words
 EXTRA_REMOVE = {
-    # Definite articles
     "le", "la", "les",
-    # Indefinite articles
     "un", "une", "des",
-    # Partitive / contracted articles
     "du", "au", "aux",
-    # Common prepositions
     "de", "à", "en", "dans", "sur", "avec", "pour", "par", "sans", "chez",
-    # Coordinating conjunctions
     "et", "ou", "mais", "donc", "or", "ni", "car",
-    # Subordinating conjunctions
-    "que", "qui", "quand", "lorsque", "comme", "puisque", "quoique","quoi", 
-    "si", "afin", "bien", "pendant", "avant", "après", "depuis", "jusqu", "malgré","chaque", "tous", "toutes","tout", "toute", "tous", "toutes",
-    # Demonstrative determiners
+    "que", "qui", "quand", "lorsque", "comme", "puisque", "quoique", "quoi",
+    "si", "afin", "bien", "pendant", "avant", "après", "depuis", "jusqu", "malgré",
+    "chaque", "tous", "toutes", "tout", "toute", "tous", "toutes",
     "ce", "cet", "cette", "ces",
 }
 
-# noise tokens
-NOISE = {"j", "m", "n", "s", "t", "quelqu", "aujourd", "hui","pa"}
+NOISE = {"j", "m", "n", "s", "t", "quelqu", "aujourd", "hui", "pa"}
 
-# remove state verbs (être + avoir conjugations)
 REMOVE_VERBS = {
     "être", "avoir",
-    # être — present
     "suis", "es", "est", "sommes", "êtes", "sont",
-    # être — imperfect
     "étais", "était", "étions", "étiez", "étaient",
-    # être — future
     "serai", "seras", "sera", "serons", "serez", "seront",
-    # être — conditional
     "serais", "serait", "serions", "seriez", "seraient",
-    # être — subjunctive
     "sois", "soit", "soyons", "soyez", "soient",
-    # avoir — present
     "ai", "as", "a", "avons", "avez", "ont",
-    # avoir — imperfect
     "avais", "avait", "avions", "aviez", "avaient",
-    # avoir — future
     "aurai", "auras", "aura", "aurons", "aurez", "auront",
-    # avoir — conditional
     "aurais", "aurait", "aurions", "auriez", "auraient",
-    # avoir — subjunctive
     "aie", "aies", "ait", "ayons", "ayez", "aient",
-    # past participles (used in compound tenses)
     "été", "eu",
 }
 
-# words to KEEP (protect them from removal)
 KEEP_WORDS = {
     "ne", "pas", "rien", "personne", "jamais",
     "plus", "toujours", "parfois", "tellement", "trop",
@@ -223,7 +189,6 @@ KEEP_WORDS = {
     "résilience", "guérison"
 }
 
-# final stopwords
 STOPWORDS = (PRONOUNS | EXTRA_REMOVE | NOISE | REMOVE_VERBS) - KEEP_WORDS
 
 
@@ -231,152 +196,101 @@ class TextCleaner:
     """
     All text cleaning, tokenisation, lemmatisation, and feature extraction
     needed to convert raw post text into analysis-ready columns.
-
-    Main entry point: fit_transform(df, text_col) — adds these columns:
-        cleaned_text      – normalised text (lower, no emoji/URL/mention)
-        hashtags          – list of #tags extracted before cleaning
-        tokens            – lemmatised, stop-word-free token list
-        char_count        – character count of cleaned_text
-        word_count        – word count of cleaned_text
-        punct_count       – total ?!... marks
-        question_count    – count of '?'
-        exclamation_count – count of '!'
-        ellipsis_count    – count of '...'
-        text_nostop       – tokens joined back to a string (for word clouds etc.)
-        emoji_count       – emoji count from the *original* text
-        emoticon_count    – ASCII emoticon count from the original text
     """
 
     def __init__(self) -> None:
         self.nlp           = nlp
         self.stopwords_set: Set[str] = STOPWORDS
 
-        # Unicode ranges covering the most common emoji blocks.
-        # Used as a fallback after the emoji library's own replacement.
         self.emoji_regex = (
-            r'[\U0001F600-\U0001F64F]|'   # emoticons
-            r'[\U0001F300-\U0001F5FF]|'   # symbols & pictographs
-            r'[\U0001F680-\U0001F6FF]|'   # transport & map
-            r'[\U00002600-\U000026FF]|'   # misc symbols
-            r'[\U00002700-\U000027BF]|'   # dingbats
-            r'[\U0001F900-\U0001F9FF]|'   # supplemental symbols
-            r'[\U0001FA00-\U0001FA6F]|'   # chess symbols
-            r'[\U0001FA70-\U0001FAFF]'    # symbols & pictographs extended-A
+            r'[\U0001F600-\U0001F64F]|'
+            r'[\U0001F300-\U0001F5FF]|'
+            r'[\U0001F680-\U0001F6FF]|'
+            r'[\U00002600-\U000026FF]|'
+            r'[\U00002700-\U000027BF]|'
+            r'[\U0001F900-\U0001F9FF]|'
+            r'[\U0001FA00-\U0001FA6F]|'
+            r'[\U0001FA70-\U0001FAFF]'
         )
 
-        # Common ASCII / text emoticons grouped by emotion.
         self.emoticon_patterns: List[str] = [
-            r':\)|:-\)|:\]|=\]|=\)',    # happy
-            r':\(|:-\(|:\[|=\[|=\(',    # sad
-            r':D|:-D|=D',               # big smile
-            r';\)|;-\)',                 # wink
-            r':P|:-P|=P',               # tongue out
-            r':o|:-o|:O|:-O',           # surprised
-            r':/|:-/',                   # skeptical / unsure
-            r":'\(",                     # crying
-            r'<3',                       # heart
+            r':\)|:-\)|:\]|=\]|=\)',
+            r':\(|:-\(|:\[|=\[|=\(',
+            r':D|:-D|=D',
+            r';\)|;-\)',
+            r':P|:-P|=P',
+            r':o|:-o|:O|:-O',
+            r':/|:-/',
+            r":'\(",
+            r'<3',
         ]
 
-    # ── Low-level cleaning helpers ────────────────────────────────────────────
-    
     def remove_emojis(self, text: str) -> str:
         text = emoji.replace_emoji(text, replace="")
-        text = re.sub(self.emoji_regex, "", text)  # catches any survivors
+        text = re.sub(self.emoji_regex, "", text)
         return text
 
     def replace_urls(self, text: str) -> str:
-        """Replace HTTP/HTTPS URLs and bare www. links with the token ' URL '."""
         return re.sub(r'https?://\S+|www\.\S+', ' URL ', text)
 
     def replace_mentions(self, text: str) -> str:
-        """Replace @username mentions with the anonymisation token ' PEOPLE '."""
         return re.sub(r'@\w+', ' PEOPLE ', text)
 
     def extract_hashtags(self, text: str) -> Tuple[List[str], str]:
-        """Pull out all #tags before cleaning. Returns (hashtag_list, text_without_hashtags)."""
         hashtags = re.findall(r'#\w+', text)
         text_without_hashtags = re.sub(r'#\w+', '', text)
         return hashtags, text_without_hashtags
 
     def standardize_text(self, text: str) -> str:
-        """Lowercase the text and collapse newline characters to spaces."""
         return text.lower().replace('\n', ' ').replace('\r', ' ')
 
-    # ── spaCy-based NLP helpers ───────────────────────────────────────────────
-
     def tokenize(self, cleaned_text: str) -> List[str]:
-        """Tokenise with spaCy and keep only alphabetic tokens (no punctuation/numbers)."""
         doc = self.nlp(cleaned_text)
         return [token.text.lower() for token in doc if token.is_alpha]
 
     def lemmatize(self, tokens: List[str]) -> List[str]:
-        """Lemmatise tokens using spaCy. Re-joins first so spaCy uses context."""
         doc = self.nlp(" ".join(tokens))
         return [token.lemma_.lower() for token in doc if token.is_alpha]
 
     def remove_stopwords(self, tokens: List[str]) -> List[str]:
-        """Filter out any token present in the combined STOPWORDS set."""
         return [t for t in tokens if t not in self.stopwords_set]
 
     def clean_text(self, text: str) -> Tuple[str, List[str]]:
-        """
-        Full cleaning pipeline for a single post:
-          1. Lowercase + normalise whitespace
-          2. Strip emojis
-          3. Replace URLs
-          4. Replace @mentions
-          5. Extract and remove #hashtags
-          6. Remove remaining punctuation (keep !, ?, -, ')
-          7. Collapse extra spaces
-        Returns (cleaned_text, hashtag_list).
-        """
         text = self.standardize_text(text)
         text = self.remove_emojis(text)
         text = self.replace_urls(text)
         text = self.replace_mentions(text)
         hashtags, text = self.extract_hashtags(text)
         text = re.sub(r"[^\w\s!?\-']", "", text)
-        text = self.remove_emojis(text)            
+        text = self.remove_emojis(text)
         text = re.sub(r"\s+", " ", text).strip()
         return text, hashtags
 
     def preprocess(self, cleaned_text: str) -> List[str]:
-        """Convenience: tokenise → lemmatise → remove stop-words in one call."""
         tokens = self.tokenize(cleaned_text)
         lemmas = self.lemmatize(tokens)
         return self.remove_stopwords(lemmas)
 
     def fit_transform(self, df: pd.DataFrame, text_col: str) -> pd.DataFrame:
-        """
-        Apply the full cleaning + feature extraction pipeline to every row
-        of df[text_col] and return the enriched DataFrame.
-        Note: emoji/emoticon counts use the *original* text (before cleaning)
-        so that the signal is not lost by the cleaning step.
-        """
         df = df.copy()
 
-        # ── Step 1: clean text + extract hashtags ─────────────────────────────
         cleaned_results    = df[text_col].apply(self.clean_text)
         df["cleaned_text"] = cleaned_results.apply(lambda x: x[0])
         df["hashtags"]     = cleaned_results.apply(lambda x: x[1])
 
-        # ── Step 2: tokenise + lemmatise + de-stop ────────────────────────────
         df["tokens"] = df["cleaned_text"].apply(self.preprocess)
 
-        # ── Step 3: surface-level text statistics ─────────────────────────────
-        df["char_count"]          = df["cleaned_text"].apply(len)
-        df["text_length"]          = df["cleaned_text"].apply(lambda x: len(x.split()))
-        df["punct_count"]         = df["cleaned_text"].apply(
+        df["char_count"]        = df["cleaned_text"].apply(len)
+        df["text_length"]       = df["cleaned_text"].apply(lambda x: len(x.split()))
+        df["punct_count"]       = df["cleaned_text"].apply(
             lambda x: x.count('?') + x.count('!') + x.count('...')
         )
-        df["question_count"]      = df["cleaned_text"].apply(lambda x: x.count('?'))
-        df["exclamation_count"]   = df["cleaned_text"].apply(lambda x: x.count('!'))
-        df["ellipsis_count"]      = df["cleaned_text"].apply(lambda x: x.count('...'))
+        df["question_count"]    = df["cleaned_text"].apply(lambda x: x.count('?'))
+        df["exclamation_count"] = df["cleaned_text"].apply(lambda x: x.count('!'))
+        df["ellipsis_count"]    = df["cleaned_text"].apply(lambda x: x.count('...'))
 
-        # ── Step 4: token string for word-cloud / co-occurrence analyses ───────
         df["text_nostop"] = df["tokens"].apply(lambda tokens: " ".join(tokens))
 
-        # ── Step 5: emoji & emoticon counts from the ORIGINAL raw text ─────────
         df["emoji_count"]    = df[text_col].apply(lambda x: len(emoji.emoji_list(x)))
         df["emoticon_count"] = df[text_col].apply(
             lambda x: sum(
@@ -396,9 +310,6 @@ df_raw  = DataLoader(cfg).load()
 cleaner = TextCleaner()
 df      = cleaner.fit_transform(df_raw, cfg.TEXT_COL)
 
-# ── Emoji / emoticon sanity check ──────────────────────────────────────────────
-# Diagnostic: confirms whether the dataset contains meaningful emoji/emoticon signal.
-# Result: only 23/6000+ posts have emojis, 0 have emoticons — dataset is formal/synthetic.
 print("\n── Emoji & Emoticon Diagnostics ──")
 print(df["emoji_count"].value_counts())
 print(df["emoticon_count"].value_counts())
@@ -406,6 +317,7 @@ print(f"Posts with any emoji:    {(df['emoji_count'] > 0).sum()}")
 print(f"Posts with any emoticon: {(df['emoticon_count'] > 0).sum()}")
 
 df.head(3)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # GRAPH 1 — Label Distribution
@@ -432,7 +344,6 @@ class LabelDistribution:
                 str(val), va="center", fontsize=9,
             )
 
-        # ── Pie with both count AND percentage ────────────────────────────────
         def make_autopct(values):
             def autopct(pct):
                 total = sum(values)
@@ -454,27 +365,29 @@ class LabelDistribution:
 
 LabelDistribution(cfg, helper).analyse(df)
 
-# ── GRAPH 2 — Text Length Analysis ────────────────────────────────────────────
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GRAPH 2 — Text Length Analysis
+# ═══════════════════════════════════════════════════════════════════════════════
 class TextLengthAnalysis:
     def __init__(self, cfg: Config, helper: PlotHelper):
-        self.cfg = cfg
+        self.cfg    = cfg
         self.helper = helper
 
     def analyse(self, df: pd.DataFrame) -> None:
         labels = df[self.cfg.LABEL_COL].unique()
         colors = sns.color_palette(self.cfg.PALETTE, len(labels))
 
+        # ── Plot 2a: Histogram with median line ───────────────────────────────
         fig, axes = plt.subplots(1, len(labels), figsize=(6 * len(labels), 5))
         fig.suptitle("Text Length Distribution by Label", fontsize=14, fontweight="bold")
 
-        # Fix if only one label
         if len(labels) == 1:
             axes = [axes]
 
         for ax, label, color in zip(axes, labels, colors):
             subset = df[df[self.cfg.LABEL_COL] == label]["text_length"]
 
-            # ── Histogram ─────────────────────────────
             counts, bins, patches = ax.hist(
                 subset,
                 bins=30,
@@ -483,7 +396,18 @@ class TextLengthAnalysis:
                 alpha=0.85
             )
 
-            # ── Add values on bars ────────────────────
+            # ── Median line ───────────────────────────────────────────────────
+            median_val = subset.median()
+            ax.axvline(
+                median_val,
+                color="red",
+                linestyle="--",
+                linewidth=1.8,
+                label=f"Median = {median_val:.0f}"
+            )
+            ax.legend(fontsize=9)
+
+            # ── Bar value annotations ─────────────────────────────────────────
             for count, patch in zip(counts, patches):
                 if count > 0:
                     ax.text(
@@ -495,7 +419,6 @@ class TextLengthAnalysis:
                         fontsize=8
                     )
 
-            # ── Labels & title ────────────────────────
             ax.set_title(f"{label}", fontsize=11, fontweight="bold")
             ax.set_xlabel("Text Length")
             ax.set_ylabel("Frequency")
@@ -503,7 +426,7 @@ class TextLengthAnalysis:
         plt.tight_layout()
         self.helper.save("02a_textlength_histogram_by_label.png")
 
-        # ── Plot 2b: Boxplot ───────────────────────────────────────────────
+        # ── Plot 2b: Boxplot ───────────────────────────────────────────────────
         fig, axes = plt.subplots(1, len(labels), figsize=(5 * len(labels), 5))
         fig.suptitle("Text Length Boxplot by Label", fontsize=14, fontweight="bold")
 
@@ -519,20 +442,20 @@ class TextLengthAnalysis:
                                 markerfacecolor=color, alpha=0.4),
             )
 
-            mn = subset.min()
-            q1 = subset.quantile(0.25)
+            mn     = subset.min()
+            q1     = subset.quantile(0.25)
             median = subset.median()
-            mean = subset.mean()
-            q3 = subset.quantile(0.75)
-            mx = subset.max()
+            mean   = subset.mean()
+            q3     = subset.quantile(0.75)
+            mx     = subset.max()
 
             for val, lbl, offset in [
-                (mn, f"Min: {mn:.0f}", -0.32),
-                (q1, f"Q1: {q1:.0f}", 0.32),
-                (median, f"Median: {median:.0f}", 0.32),
-                (mean, f"Mean: {mean:.0f}", -0.32),
-                (q3, f"Q3: {q3:.0f}", 0.32),
-                (mx, f"Max: {mx:.0f}", -0.32),
+                (mn,     f"Min: {mn:.0f}",       -0.32),
+                (q1,     f"Q1: {q1:.0f}",         0.32),
+                (median, f"Median: {median:.0f}",  0.32),
+                (mean,   f"Mean: {mean:.0f}",     -0.32),
+                (q3,     f"Q3: {q3:.0f}",          0.32),
+                (mx,     f"Max: {mx:.0f}",        -0.32),
             ]:
                 ax.text(1 + offset, val, lbl, ha="center", va="center", fontsize=8)
 
@@ -543,7 +466,7 @@ class TextLengthAnalysis:
         plt.tight_layout()
         self.helper.save("02b_textlength_boxplot_by_label.png")
 
-        # ── Plot 2c: Char Count Boxplot ────────────────────────────────────
+        # ── Plot 2c: Char Count Boxplot ────────────────────────────────────────
         fig, axes = plt.subplots(1, len(labels), figsize=(5 * len(labels), 5))
         fig.suptitle("Char Count Distribution by Label", fontsize=14, fontweight="bold")
 
@@ -559,20 +482,20 @@ class TextLengthAnalysis:
                                 markerfacecolor=color, alpha=0.4),
             )
 
-            mn = subset.min()
-            q1 = subset.quantile(0.25)
+            mn     = subset.min()
+            q1     = subset.quantile(0.25)
             median = subset.median()
-            mean = subset.mean()
-            q3 = subset.quantile(0.75)
-            mx = subset.max()
+            mean   = subset.mean()
+            q3     = subset.quantile(0.75)
+            mx     = subset.max()
 
             for val, lbl, offset in [
-                (mn, f"Min: {mn:.0f}", -0.32),
-                (q1, f"Q1: {q1:.0f}", 0.32),
-                (median, f"Median: {median:.0f}", 0.32),
-                (mean, f"Mean: {mean:.0f}", -0.32),
-                (q3, f"Q3: {q3:.0f}", 0.32),
-                (mx, f"Max: {mx:.0f}", -0.32),
+                (mn,     f"Min: {mn:.0f}",       -0.32),
+                (q1,     f"Q1: {q1:.0f}",         0.32),
+                (median, f"Median: {median:.0f}",  0.32),
+                (mean,   f"Mean: {mean:.0f}",     -0.32),
+                (q3,     f"Q3: {q3:.0f}",          0.32),
+                (mx,     f"Max: {mx:.0f}",        -0.32),
             ]:
                 ax.text(1 + offset, val, lbl, ha="center", va="center", fontsize=8)
 
@@ -584,8 +507,9 @@ class TextLengthAnalysis:
         self.helper.save("02c_charcount_boxplot_by_label.png")
 
 
-
 TextLengthAnalysis(cfg, helper).analyse(df)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # GRAPH 3a — Punctuation Analysis
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -651,7 +575,7 @@ PunctuationAnalysis(cfg, helper).analyse(df)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# GRAPH 3b — Punctuation Table  (unchanged — already shows exact numbers)
+# GRAPH 3b — Punctuation Table
 # ═══════════════════════════════════════════════════════════════════════════════
 class PunctuationTable:
     def __init__(self, cfg: Config, helper: PlotHelper):
@@ -711,11 +635,6 @@ PunctuationTable(cfg, helper).analyse(df)
 # GRAPH 4 — Word Clouds per Label
 # ═══════════════════════════════════════════════════════════════════════════════
 class WordCloudAnalysis:
-    """
-    Req 4 — One word cloud per label using stop-word-free lemmatised tokens.
-    Gives an instant visual summary of dominant vocabulary per mental-health label.
-    """
-
     def __init__(self, cfg: Config, helper: PlotHelper):
         self.cfg    = cfg
         self.helper = helper
@@ -743,14 +662,13 @@ class WordCloudAnalysis:
                 background_color="white",
                 colormap=cmaps[i % len(cmaps)],
                 max_words=100,
-                collocations=False,   # avoids repeated bigrams in the cloud
+                collocations=False,
             ).generate(text)
 
             axes[i].imshow(wc, interpolation="bilinear")
             axes[i].axis("off")
             axes[i].set_title(str(label), fontsize=12, fontweight="bold")
 
-        # Hide any leftover empty axes (when labels < rows*cols).
         for j in range(i + 1, len(axes)):
             axes[j].axis("off")
 
@@ -759,8 +677,6 @@ class WordCloudAnalysis:
 
 
 WordCloudAnalysis(cfg, helper).analyse(df)
-
-
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -798,7 +714,6 @@ class CoOccurrenceAnalysis:
                          fontsize=13, fontweight="bold")
             ax.set_xlabel("Co-occurrence count")
 
-            # Annotate every bar with its exact count
             for bar, val in zip(ax.patches, counts):
                 ax.text(
                     bar.get_width() + max(counts) * 0.01,
@@ -815,39 +730,36 @@ class CoOccurrenceAnalysis:
 
 CoOccurrenceAnalysis(cfg, helper).analyse(df)
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GRAPH 6 — Common Words / Bigrams / Trigrams
+# ═══════════════════════════════════════════════════════════════════════════════
 from sklearn.feature_extraction.text import CountVectorizer
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 
 class CommonWordsAnalysis:
     def __init__(self, cfg: Config, helper: PlotHelper):
-        self.cfg = cfg
+        self.cfg    = cfg
         self.helper = helper
 
     def _get_ngram_freq(self, texts, n):
         vectorizer = CountVectorizer(
             ngram_range=(n, n),
-            min_df=2,          # ignore rare noise
-            max_df=0.95        # ignore overly common words
+            min_df=2,
+            max_df=0.95
         )
-
-        X = vectorizer.fit_transform(texts)
+        X     = vectorizer.fit_transform(texts)
         freqs = X.toarray().sum(axis=0)
-
-        df = pd.DataFrame({
+        df    = pd.DataFrame({
             "ngram": vectorizer.get_feature_names_out(),
             "count": freqs
         })
-
         return df.sort_values("count", ascending=False).head(self.cfg.TOP_N_WORDS)
 
     def _plot_ngrams(self, df: pd.DataFrame, n: int, title_prefix: str, filename: str) -> str:
         labels = df[self.cfg.LABEL_COL].unique()
-        cols = min(2, len(labels))
-        rows = (len(labels) + cols - 1) // cols
+        cols   = min(2, len(labels))
+        rows   = (len(labels) + cols - 1) // cols
 
         fig, axes = plt.subplots(rows, cols, figsize=(cols * 8, rows * 5))
         axes = np.array(axes).flatten()
@@ -856,9 +768,7 @@ class CommonWordsAnalysis:
                      fontsize=14, fontweight="bold")
 
         for i, label in enumerate(labels):
-
-            texts = df[df[self.cfg.LABEL_COL] == label]["text_nostop"].dropna().astype(str)
-
+            texts      = df[df[self.cfg.LABEL_COL] == label]["text_nostop"].dropna().astype(str)
             top_ngrams = self._get_ngram_freq(texts, n)
 
             if top_ngrams.empty:
@@ -877,7 +787,6 @@ class CommonWordsAnalysis:
             axes[i].set_xlabel("Frequency")
             axes[i].set_ylabel("")
 
-            # annotations
             for bar, val in zip(axes[i].patches, top_ngrams["count"]):
                 axes[i].text(
                     bar.get_width() + max(top_ngrams["count"]) * 0.01,
@@ -898,9 +807,10 @@ class CommonWordsAnalysis:
     def analyse(self, df: pd.DataFrame) -> list:
         return [
             self._plot_ngrams(df, 1, "Common Words", "06_common_words_per_label.png"),
-            self._plot_ngrams(df, 2, "Bigrams", "06_bigrams_per_label.png"),
-            self._plot_ngrams(df, 3, "Trigrams", "06_trigrams_per_label.png"),
+            self._plot_ngrams(df, 2, "Bigrams",       "06_bigrams_per_label.png"),
+            self._plot_ngrams(df, 3, "Trigrams",      "06_trigrams_per_label.png"),
         ]
+
 
 CommonWordsAnalysis(cfg, helper).analyse(df)
 
@@ -927,7 +837,6 @@ class CategoryDistribution:
             axes[0].text(bar.get_width() + 10, bar.get_y() + bar.get_height() / 2,
                          str(val), va="center", fontsize=9)
 
-        # ── Pie with both count AND percentage ────────────────────────────────
         def make_autopct(values):
             def autopct(pct):
                 total = sum(values)
@@ -948,7 +857,7 @@ CategoryDistribution(cfg, helper).analyse(df)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# GRAPH 8 — Category × Label Heatmap  (annot=True already shows exact counts)
+# GRAPH 8 — Category × Label Heatmap
 # ═══════════════════════════════════════════════════════════════════════════════
 class CategoryLabelHeatmap:
     def __init__(self, cfg: Config, helper: PlotHelper):
@@ -958,7 +867,6 @@ class CategoryLabelHeatmap:
     def analyse(self, df: pd.DataFrame) -> str:
         cross = pd.crosstab(df["category"], df[self.cfg.LABEL_COL])
 
-        # Add row and column totals for full context
         cross.loc["Total"] = cross.sum()
         cross["Total"]     = cross.sum(axis=1)
 
@@ -978,7 +886,24 @@ CategoryLabelHeatmap(cfg, helper).analyse(df)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# GRAPH 10 — Emoji & Emoticon Analysis
+# GRAPH 8b — Per-Category Healthy vs Unhealthy Word Comparison
+# ═══════════════════════════════════════════════════════════════════════════════
+for category in df["category"].unique():
+    subset = df[df["category"] == category]
+
+    healthy_words   = " ".join(subset[subset["mental_state"] == "Healthy"]["text_nostop"])
+    unhealthy_words = " ".join(subset[subset["mental_state"] == "Unhealthy"]["text_nostop"])
+
+    healthy_freq   = Counter(healthy_words.split()).most_common(15)
+    unhealthy_freq = Counter(unhealthy_words.split()).most_common(15)
+
+    print(f"\n=== {category} ===")
+    print("Healthy top words:",   healthy_freq)
+    print("Unhealthy top words:", unhealthy_freq)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GRAPH 10 — Emoji & Emoticon Analysis  (fixed: pie chart now renders correctly)
 # ═══════════════════════════════════════════════════════════════════════════════
 class EmojiEmoticonAnalysis:
     def __init__(self, cfg: Config, helper: PlotHelper):
@@ -986,14 +911,15 @@ class EmojiEmoticonAnalysis:
         self.helper = helper
 
     def analyse(self, df: pd.DataFrame) -> str:
-        fig, axes = plt.subplots(2, 2, figsize=(13, 10))
+        # 2 rows × 3 cols so the pie chart has its own cell in row 0
+        fig, axes = plt.subplots(2, 3, figsize=(18, 10))
         fig.suptitle(
             "Emoji & Emoticon Analysis\n"
             "⚠️ <1% of posts contain emojis — results not statistically meaningful",
             fontsize=13, fontweight="bold"
         )
 
-        # ── Top-left: emoji count distribution with mean + median annotated ───
+        # ── Row 0, cols 0-1: distribution histograms ──────────────────────────
         for col, ax, color, title, xlabel in [
             ("emoji_count",    axes[0, 0], "#F4A460", "Emoji Count Distribution",    "Emojis per text"),
             ("emoticon_count", axes[0, 1], "#87CEEB", "Emoticon Count Distribution", "Emoticons per text"),
@@ -1006,8 +932,6 @@ class EmojiEmoticonAnalysis:
             ax.set_title(title)
             ax.set_xlabel(xlabel)
             ax.legend()
-
-            # Annotate bar heights
             for patch in ax.patches:
                 h = patch.get_height()
                 if h > 0:
@@ -1017,7 +941,24 @@ class EmojiEmoticonAnalysis:
                         ha="center", va="bottom", fontsize=8,
                     )
 
-        # ── Bottom row: avg per label with exact values ───────────────────────
+        # ── Row 0, col 2: emoji presence pie chart ────────────────────────────
+        ax_pie         = axes[0, 2]
+        emoji_presence = (df["emoji_count"] > 0).value_counts()
+        no_emoji       = emoji_presence.get(False, 0)
+        has_emoji      = emoji_presence.get(True,  0)
+        sizes          = [no_emoji, has_emoji]
+        pie_labels     = [f"No Emoji\n(n={no_emoji})", f"Contains Emoji\n(n={has_emoji})"]
+
+        ax_pie.pie(
+            sizes,
+            labels=pie_labels,
+            autopct="%1.2f%%",
+            colors=["#d3d3d3", "#F4A460"],
+            startangle=90,
+        )
+        ax_pie.set_title("Emoji Presence Distribution")
+
+        # ── Row 1, cols 0-1: avg per label ────────────────────────────────────
         for col, ax, title in [
             ("emoji_count",    axes[1, 0], "Avg Emoji Count by Label"),
             ("emoticon_count", axes[1, 1], "Avg Emoticon Count by Label"),
@@ -1035,18 +976,39 @@ class EmojiEmoticonAnalysis:
                 )
             ax.set_xlim(0, avg.values.max() * 1.15)
 
+        # ── Row 1, col 2: unused cell ─────────────────────────────────────────
+        axes[1, 2].axis("off")
+
         plt.tight_layout()
         return self.helper.save("10_emoji_emoticon.png")
 
 
 EmojiEmoticonAnalysis(cfg, helper).analyse(df)
 
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # FINAL SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════════
-# Save the cleaned DataFrame so downstream modelling steps can load it
-# directly without re-running the full cleaning pipeline.
 df.to_csv(f"{cfg.OUTPUT_DIR}/french_cleaned.csv", index=False, encoding="utf-8-sig")
+
+# ── Emojis from the ORIGINAL dataset → saved to text file ────────────────────
+all_emojis = []
+for text in df_raw[cfg.TEXT_COL]:
+    all_emojis.extend([item['emoji'] for item in emoji.emoji_list(str(text))])
+
+emoji_counts   = Counter(all_emojis)
+emoji_txt_path = os.path.join(cfg.OUTPUT_DIR, "emojis_found.txt")
+
+with open(emoji_txt_path, "w", encoding="utf-8") as f:
+    f.write(f"Emojis found in ORIGINAL dataset ({len(emoji_counts)} unique)\n")
+    f.write("=" * 45 + "\n")
+    for em, count in emoji_counts.most_common():
+        f.write(f"  {em}  →  {count} times\n")
+
+print(f"\n── Emojis found in ORIGINAL dataset ({len(emoji_counts)} unique) ──")
+for em, count in emoji_counts.most_common():
+    print(f"   {em}  →  {count} times")
+print(f"\n📄 Emoji list saved to: {emoji_txt_path}")
 
 print("=" * 55)
 print("  FRENCH EDA PIPELINE — COMPLETE")
@@ -1057,31 +1019,6 @@ print(f"\n📊 {len(saved)} plots saved to '{cfg.OUTPUT_DIR}/':")
 for f in sorted(saved):
     print(f"   • {f}")
 
-print(f"\n📄 Cleaned CSV : {cfg.OUTPUT_DIR}/french_cleaned.csv")
+print(f"\n📄 Cleaned CSV  : {cfg.OUTPUT_DIR}/french_cleaned.csv")
+print(f"📄 Emoji list   : {emoji_txt_path}")
 print("\n✅ All done!")
-
-# ── Actual emojis found in the dataset ────────────────────────────────────────
-"""from collections import Counter
-
-all_emojis = []
-for text in df_raw[cfg.TEXT_COL]:  # use df_raw — the original uncleaned text
-    all_emojis.extend([item['emoji'] for item in emoji.emoji_list(str(text))])
-
-emoji_counts = Counter(all_emojis)
-print(f"\n── Emojis found in dataset ({len(emoji_counts)} unique) ──")
-for em, count in emoji_counts.most_common():
-    print(f"   {em}  →  {count} times")"""
-
-
-
-
-all_emojis = []
-
-for text in df["cleaned_text"]:  
-    all_emojis.extend([item['emoji'] for item in emoji.emoji_list(str(text))])
-
-emoji_counts = Counter(all_emojis)
-
-print(f"\n── Emojis found in CLEANED dataset ({len(emoji_counts)} unique) ──")
-for em, count in emoji_counts.most_common():
-    print(f"   {em}  →  {count} times")

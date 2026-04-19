@@ -1,0 +1,16 @@
+Emojis found in ORIGINAL dataset (14 unique)
+=============================================
+  💪  →  4 times
+  ✨  →  4 times
+  🌟  →  3 times
+  🌊  →  2 times
+  💫  →  2 times
+  🌱  →  2 times
+  🌅  →  1 times
+  😢  →  1 times
+  💔  →  1 times
+  😔  →  1 times
+  ❤️  →  1 times
+  🦋  →  1 times
+  🌈  →  1 times
+  🌺  →  1 times
