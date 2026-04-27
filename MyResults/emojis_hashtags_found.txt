@@ -14,3 +14,16 @@ Emojis found in ORIGINAL dataset (14 unique)
   🦋  →  1 times
   🌈  →  1 times
   🌺  →  1 times
+
+
+Hashtags found in dataset (9 unique)
+=============================================
+  #resteforte  →  1 times
+  #guérisonmentale  →  1 times
+  #espoir  →  1 times
+  #guerison  →  1 times
+  #entraide  →  1 times
+  #mentalhealth  →  1 times
+  #onestensemble  →  1 times
+  #depressedaf  →  1 times
+  #bestlife  →  1 times
