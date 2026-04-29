@@ -926,9 +926,7 @@ class EDAAnalysis:
             ("emoticon_count", axes[0, 1], "#87CEEB", "Emoticon Count Distribution", "Emoticons per text"),
         ]:
             ax.hist(df[col], bins=20, color=color, edgecolor="white")
-            mean   = df[col].mean()
             median = df[col].median()
-            ax.axvline(mean,   color="red",  linestyle="--", label=f"Mean={mean:.4f}")
             ax.axvline(median, color="navy", linestyle=":",  label=f"Median={median:.4f}")
             ax.set_title(title)
             ax.set_xlabel(xlabel)
