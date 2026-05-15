@@ -1,0 +1,4 @@
+Model,Class,Precision,Recall,F1-score,Support,Accuracy,Macro F1
+LR + CamemBERT,Healthy,0.9097,0.9097,0.9097,642,0.9037,0.9033
+,Unhealthy,0.897,0.897,0.897,563,,
+,macro avg,0.9033,0.9033,0.9033,1205,,
