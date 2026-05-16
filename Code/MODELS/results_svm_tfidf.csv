@@ -1,3 +1,0 @@
-Model,Class,Accuracy,Precision,Recall,F1-score,Support,Macro avg
-SVM + TF-IDF,Healthy,0.98,0.97,0.98,0.98,642,0.98
-,Unhealthy,,0.98,0.97,0.97,563,
