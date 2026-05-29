@@ -1,0 +1,12 @@
+config.yaml — the only file you edit between experiments. Change architecture: "bilstm" to "lstm" or "cnn_rnn", flip vectorizer: between "camembert" and "tfidf", tune learning rate, epochs, hidden size — all in one place. No touching code.
+dl_model.py — contains all 3 architectures (LSTMClassifier, BiLSTMClassifier, CNNRNNClassifier) plus a get_model(cfg) factory function that reads config.yaml and returns the right one. You never instantiate a model manually — always go through get_model.
+trainer.py — the training loop. Handles batching, forward pass, loss, backprop, validation accuracy, early stopping (stops if val loss doesn't improve for patience epochs), LR scheduler, and auto-saves the best checkpoint. Calls metrics.py at the end automatically.
+metrics.py — same evaluation table format as your SVM notebook (Accuracy, Precision, Recall, F1, Macro avg per class) so you can compare ML vs DL results directly. Also has plot_confusion_matrix() and epoch_log() used by the trainer.
+predictor.py — what the website calls. Loads the checkpoint + vectorizer once at startup, then predict("some french text") returns {"label": "Unhealthy", "confidence": 0.87, "language": "fr"}. Your teammates use the exact same class pointing to their own config.
+The full flow to run an experiment is now just:
+pythoncfg = yaml.safe_load(open("config.yaml"))
+X_train, X_test, y_train, y_test, le = load_french_dataset(cfg["paths"]["data"])
+X_train_emb = CamembertVectorizer().encode_dataset(X_train)
+model   = get_model(cfg).to(device)
+trainer = Trainer(model, cfg, device)
+trainer.fit(X_train_emb, y_train, X_test_emb, y_test, le)

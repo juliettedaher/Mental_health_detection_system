@@ -1,0 +1,36 @@
+paths:
+  data:        "C:/Users/Admin/Documents/FYP/french dataset/MyResults/french_cleaned.csv"
+  checkpoints: "models/checkpoints/"
+  results:     "results/"
+
+dataset:
+  text_col:     "text_nostop"
+  label_col:    "mental_state"
+  test_size:    0.2
+  random_state: 42
+  num_classes:  2
+
+model:
+  architecture:     "lstm"
+  vocab_size:       20000
+  embed_dim:        128
+  hidden_size:      128
+  num_layers:       1
+  dropout:          0.3
+  num_classes:      2
+  cnn_out_channels: 128
+  cnn_kernel_size:  3
+
+tokenizer:
+  max_vocab: 20000
+  max_len:   50        # was 100 — your texts average 13 words, 50 is enough
+
+training:
+  epochs:             50
+  batch_size:         32
+  learning_rate:      0.0001
+  weight_decay:       1.0e-5
+  clip_grad_norm:     1.0
+  patience:           7
+  scheduler_factor:   0.5
+  scheduler_patience: 3
