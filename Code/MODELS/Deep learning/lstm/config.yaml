@@ -23,7 +23,7 @@ model:
 
 tokenizer:
   max_vocab: 20000
-  max_len:   50        # was 100 — your texts average 13 words, 50 is enough
+  max_len:   50     
 
 training:
   epochs:             50
