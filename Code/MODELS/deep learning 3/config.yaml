@@ -1,5 +1,8 @@
 vectorizer: "tfidf"
 
+cv:
+  n_folds: 5
+
 model:
   architecture: "lstm"
   input_size:   5000
