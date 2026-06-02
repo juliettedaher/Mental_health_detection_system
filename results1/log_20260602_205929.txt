@@ -1,0 +1,6 @@
+============================================================
+ French Mental Health Classifier
+ Model      : BILSTM
+ Vectorizer : tfidf
+============================================================
+[DATA] Samples: 6022

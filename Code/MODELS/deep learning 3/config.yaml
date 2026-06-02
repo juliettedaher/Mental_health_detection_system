@@ -1,11 +1,11 @@
-vectorizer: "camembert"
+vectorizer: "tfidf"
 
 cv:
   n_folds: 5
 
 model:
-  architecture: "cnn_rnn"
-  input_size:   768
+  architecture: "cnnrnn"
+  input_size:   5000
   hidden_size:  256
   num_layers:   1
   dropout:      0.5

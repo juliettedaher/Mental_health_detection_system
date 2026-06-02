@@ -1,0 +1,57 @@
+============================================================
+ French Mental Health Classifier
+ Model      : LSTM
+ Vectorizer : camembert
+============================================================
+[DATA] Samples: 6022
+[CamemBERT] Loading model on cpu...
+
+================ TRAINING ================
+
+Epoch 1/50 | Train Loss: 0.5267 | Val Loss: 0.3541 | Val Acc: 0.8448
+Epoch 2/50 | Train Loss: 0.3224 | Val Loss: 0.2862 | Val Acc: 0.8822
+Epoch 3/50 | Train Loss: 0.3095 | Val Loss: 0.2723 | Val Acc: 0.8838
+Epoch 4/50 | Train Loss: 0.2866 | Val Loss: 0.2737 | Val Acc: 0.8921
+Epoch 5/50 | Train Loss: 0.2526 | Val Loss: 0.2869 | Val Acc: 0.8664
+Epoch 6/50 | Train Loss: 0.2571 | Val Loss: 0.2607 | Val Acc: 0.8880
+Epoch 7/50 | Train Loss: 0.2530 | Val Loss: 0.2794 | Val Acc: 0.8855
+Epoch 8/50 | Train Loss: 0.2396 | Val Loss: 0.3149 | Val Acc: 0.8697
+Epoch 9/50 | Train Loss: 0.2434 | Val Loss: 0.3169 | Val Acc: 0.8739
+Epoch 10/50 | Train Loss: 0.2406 | Val Loss: 0.2449 | Val Acc: 0.8938
+Epoch 11/50 | Train Loss: 0.2332 | Val Loss: 0.2912 | Val Acc: 0.8838
+Epoch 12/50 | Train Loss: 0.2303 | Val Loss: 0.2406 | Val Acc: 0.8971
+Epoch 13/50 | Train Loss: 0.2400 | Val Loss: 0.3624 | Val Acc: 0.8382
+Epoch 14/50 | Train Loss: 0.2376 | Val Loss: 0.2477 | Val Acc: 0.8946
+Epoch 15/50 | Train Loss: 0.2295 | Val Loss: 0.2477 | Val Acc: 0.8929
+Epoch 16/50 | Train Loss: 0.2248 | Val Loss: 0.2383 | Val Acc: 0.8979
+Epoch 17/50 | Train Loss: 0.2347 | Val Loss: 0.2530 | Val Acc: 0.8880
+Epoch 18/50 | Train Loss: 0.2313 | Val Loss: 0.2541 | Val Acc: 0.8979
+Epoch 19/50 | Train Loss: 0.2291 | Val Loss: 0.3497 | Val Acc: 0.8398
+Epoch 20/50 | Train Loss: 0.2292 | Val Loss: 0.2477 | Val Acc: 0.8913
+Epoch 21/50 | Train Loss: 0.2081 | Val Loss: 0.2581 | Val Acc: 0.8838
+Epoch 22/50 | Train Loss: 0.2067 | Val Loss: 0.2543 | Val Acc: 0.8946
+Epoch 23/50 | Train Loss: 0.2005 | Val Loss: 0.2724 | Val Acc: 0.8763
+[EARLY STOP]
+[RESULTS] {'train_accuracy': 0.9099024288976542, 'test_accuracy': 0.8763485477178423, 'test_f1_macro': 0.8763430973696952}
+[metrics] Saved → results1\LSTM_camembert_20260602_194352_dbd4d6_cm.png
+
+==================================================
+Results — LSTM_camembert_20260602_194352_dbd4d6
+==================================================
+Accuracy    : 0.8763
+F1 macro    : 0.8763
+F1 weighted : 0.8764
+
+Classification Report:
+
+              precision    recall  f1-score   support
+
+     Healthy       0.93      0.83      0.88       642
+   Unhealthy       0.83      0.93      0.88       563
+
+    accuracy                           0.88      1205
+   macro avg       0.88      0.88      0.88      1205
+weighted avg       0.88      0.88      0.88      1205
+
+
+[DONE] Saved in results1

@@ -1,0 +1,64 @@
+============================================================
+ French Mental Health Classifier
+ Model      : BILSTM
+ Vectorizer : camembert
+============================================================
+[DATA] Samples: 6022
+[CamemBERT] Loading model on cpu...
+
+================ TRAINING ================
+
+Epoch 1/50 | Train Loss: 0.4850 | Val Loss: 0.4101 | Val Acc: 0.7851
+Epoch 2/50 | Train Loss: 0.3250 | Val Loss: 0.2975 | Val Acc: 0.8622
+Epoch 3/50 | Train Loss: 0.2843 | Val Loss: 0.2638 | Val Acc: 0.8888
+Epoch 4/50 | Train Loss: 0.2807 | Val Loss: 0.2813 | Val Acc: 0.8822
+Epoch 5/50 | Train Loss: 0.2686 | Val Loss: 0.2736 | Val Acc: 0.8888
+Epoch 6/50 | Train Loss: 0.2687 | Val Loss: 0.2769 | Val Acc: 0.8755
+Epoch 7/50 | Train Loss: 0.2581 | Val Loss: 0.2809 | Val Acc: 0.8855
+Epoch 8/50 | Train Loss: 0.2327 | Val Loss: 0.2440 | Val Acc: 0.8921
+Epoch 9/50 | Train Loss: 0.2251 | Val Loss: 0.2648 | Val Acc: 0.8938
+Epoch 10/50 | Train Loss: 0.2241 | Val Loss: 0.2641 | Val Acc: 0.8896
+Epoch 11/50 | Train Loss: 0.2224 | Val Loss: 0.2404 | Val Acc: 0.9004
+Epoch 12/50 | Train Loss: 0.2157 | Val Loss: 0.2876 | Val Acc: 0.8871
+Epoch 13/50 | Train Loss: 0.2201 | Val Loss: 0.2418 | Val Acc: 0.8971
+Epoch 14/50 | Train Loss: 0.2206 | Val Loss: 0.2361 | Val Acc: 0.8988
+Epoch 15/50 | Train Loss: 0.2134 | Val Loss: 0.2382 | Val Acc: 0.8954
+Epoch 16/50 | Train Loss: 0.2081 | Val Loss: 0.2420 | Val Acc: 0.8996
+Epoch 17/50 | Train Loss: 0.2229 | Val Loss: 0.2448 | Val Acc: 0.8996
+Epoch 18/50 | Train Loss: 0.2105 | Val Loss: 0.2386 | Val Acc: 0.9004
+Epoch 19/50 | Train Loss: 0.2027 | Val Loss: 0.2662 | Val Acc: 0.8797
+Epoch 20/50 | Train Loss: 0.1992 | Val Loss: 0.2345 | Val Acc: 0.8988
+Epoch 21/50 | Train Loss: 0.1948 | Val Loss: 0.2356 | Val Acc: 0.8971
+Epoch 22/50 | Train Loss: 0.1931 | Val Loss: 0.2548 | Val Acc: 0.8896
+Epoch 23/50 | Train Loss: 0.1976 | Val Loss: 0.2344 | Val Acc: 0.9012
+Epoch 24/50 | Train Loss: 0.1958 | Val Loss: 0.2371 | Val Acc: 0.8979
+Epoch 25/50 | Train Loss: 0.1970 | Val Loss: 0.2360 | Val Acc: 0.8979
+Epoch 26/50 | Train Loss: 0.1938 | Val Loss: 0.2387 | Val Acc: 0.9029
+Epoch 27/50 | Train Loss: 0.1900 | Val Loss: 0.2373 | Val Acc: 0.9021
+Epoch 28/50 | Train Loss: 0.1883 | Val Loss: 0.2401 | Val Acc: 0.8996
+Epoch 29/50 | Train Loss: 0.1864 | Val Loss: 0.2372 | Val Acc: 0.9012
+Epoch 30/50 | Train Loss: 0.1839 | Val Loss: 0.2362 | Val Acc: 0.9021
+[EARLY STOP]
+[RESULTS] {'train_accuracy': 0.9248494913846793, 'test_accuracy': 0.9020746887966805, 'test_f1_macro': 0.9013818607541558}
+[metrics] Saved → results1\BILSTM_camembert_20260602_203705_a80354_cm.png
+
+==================================================
+Results — BILSTM_camembert_20260602_203705_a80354
+==================================================
+Accuracy    : 0.9021
+F1 macro    : 0.9014
+F1 weighted : 0.9019
+
+Classification Report:
+
+              precision    recall  f1-score   support
+
+     Healthy       0.89      0.93      0.91       642
+   Unhealthy       0.91      0.88      0.89       563
+
+    accuracy                           0.90      1205
+   macro avg       0.90      0.90      0.90      1205
+weighted avg       0.90      0.90      0.90      1205
+
+
+[DONE] Saved in results1

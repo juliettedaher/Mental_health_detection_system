@@ -1,0 +1,50 @@
+============================================================
+ French Mental Health Classifier
+ Model      : LSTM
+ Vectorizer : tfidf
+============================================================
+[DATA] Samples: 6022
+[TF-IDF] fit_transform → (4817, 5000)
+[TF-IDF] transform → (1205, 5000)
+
+================ TRAINING ================
+
+Epoch 1/50 | Train Loss: 0.4870 | Val Loss: 0.1988 | Val Acc: 0.9544
+Epoch 2/50 | Train Loss: 0.1217 | Val Loss: 0.1041 | Val Acc: 0.9668
+Epoch 3/50 | Train Loss: 0.0621 | Val Loss: 0.0867 | Val Acc: 0.9701
+Epoch 4/50 | Train Loss: 0.0403 | Val Loss: 0.0833 | Val Acc: 0.9660
+Epoch 5/50 | Train Loss: 0.0296 | Val Loss: 0.0799 | Val Acc: 0.9701
+Epoch 6/50 | Train Loss: 0.0231 | Val Loss: 0.0789 | Val Acc: 0.9701
+Epoch 7/50 | Train Loss: 0.0191 | Val Loss: 0.0785 | Val Acc: 0.9710
+Epoch 8/50 | Train Loss: 0.0165 | Val Loss: 0.0777 | Val Acc: 0.9668
+Epoch 9/50 | Train Loss: 0.0148 | Val Loss: 0.0781 | Val Acc: 0.9718
+Epoch 10/50 | Train Loss: 0.0134 | Val Loss: 0.0788 | Val Acc: 0.9701
+Epoch 11/50 | Train Loss: 0.0125 | Val Loss: 0.0815 | Val Acc: 0.9693
+Epoch 12/50 | Train Loss: 0.0117 | Val Loss: 0.0805 | Val Acc: 0.9693
+Epoch 13/50 | Train Loss: 0.0099 | Val Loss: 0.0809 | Val Acc: 0.9676
+Epoch 14/50 | Train Loss: 0.0099 | Val Loss: 0.0811 | Val Acc: 0.9685
+Epoch 15/50 | Train Loss: 0.0097 | Val Loss: 0.0792 | Val Acc: 0.9710
+[EARLY STOP]
+[RESULTS] {'train_accuracy': 0.9995848038198049, 'test_accuracy': 0.970954356846473, 'test_f1_macro': 0.9708125226215926}
+[metrics] Saved → results1\LSTM_tfidf_20260602_211838_855edb_cm.png
+
+==================================================
+Results — LSTM_tfidf_20260602_211838_855edb
+==================================================
+Accuracy    : 0.9710
+F1 macro    : 0.9708
+F1 weighted : 0.9709
+
+Classification Report:
+
+              precision    recall  f1-score   support
+
+     Healthy       0.97      0.98      0.97       642
+   Unhealthy       0.97      0.96      0.97       563
+
+    accuracy                           0.97      1205
+   macro avg       0.97      0.97      0.97      1205
+weighted avg       0.97      0.97      0.97      1205
+
+
+[DONE] Saved in results1

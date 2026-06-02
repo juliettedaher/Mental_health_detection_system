@@ -1,0 +1,46 @@
+============================================================
+ French Mental Health Classifier
+ Model      : CNNRNN
+ Vectorizer : tfidf
+============================================================
+[DATA] Samples: 6022
+[TF-IDF] fit_transform → (4817, 5000)
+[TF-IDF] transform → (1205, 5000)
+
+================ TRAINING ================
+
+Epoch 1/50 | Train Loss: 0.6679 | Val Loss: 0.5666 | Val Acc: 0.7278
+Epoch 2/50 | Train Loss: 0.4807 | Val Loss: 0.5126 | Val Acc: 0.7245
+Epoch 3/50 | Train Loss: 0.2702 | Val Loss: 0.4242 | Val Acc: 0.8266
+Epoch 4/50 | Train Loss: 0.1370 | Val Loss: 0.4011 | Val Acc: 0.8473
+Epoch 5/50 | Train Loss: 0.0695 | Val Loss: 0.4092 | Val Acc: 0.8456
+Epoch 6/50 | Train Loss: 0.0336 | Val Loss: 0.4938 | Val Acc: 0.8340
+Epoch 7/50 | Train Loss: 0.0218 | Val Loss: 0.4491 | Val Acc: 0.8539
+Epoch 8/50 | Train Loss: 0.0206 | Val Loss: 0.8808 | Val Acc: 0.7693
+Epoch 9/50 | Train Loss: 0.0095 | Val Loss: 0.4951 | Val Acc: 0.8680
+Epoch 10/50 | Train Loss: 0.0042 | Val Loss: 0.5062 | Val Acc: 0.8556
+Epoch 11/50 | Train Loss: 0.0044 | Val Loss: 0.4766 | Val Acc: 0.8631
+[EARLY STOP]
+[RESULTS] {'train_accuracy': 0.9997924019099025, 'test_accuracy': 0.8630705394190872, 'test_f1_macro': 0.86263309200422}
+[metrics] Saved → results1\CNNRNN_tfidf_20260602_212527_dd9732_cm.png
+
+==================================================
+Results — CNNRNN_tfidf_20260602_212527_dd9732
+==================================================
+Accuracy    : 0.8631
+F1 macro    : 0.8626
+F1 weighted : 0.8631
+
+Classification Report:
+
+              precision    recall  f1-score   support
+
+     Healthy       0.88      0.86      0.87       642
+   Unhealthy       0.85      0.86      0.85       563
+
+    accuracy                           0.86      1205
+   macro avg       0.86      0.86      0.86      1205
+weighted avg       0.86      0.86      0.86      1205
+
+
+[DONE] Saved in results1

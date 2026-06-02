@@ -114,7 +114,7 @@ def save_results(cfg, history, metrics, results_dir, run_id, timestamp):
         "test_mean_f1_macro": metrics["test_f1_macro"],
     }
 
-    # ───── CSV ─────
+    # CSV
     csv_path = os.path.join(results_dir, "results.csv")
     file_exists = os.path.exists(csv_path)
 
@@ -124,14 +124,13 @@ def save_results(cfg, history, metrics, results_dir, run_id, timestamp):
             writer.writeheader()
         writer.writerow(record)
 
-    # ───── JSON ─────
+    # JSON
     json_path = os.path.join(results_dir, f"{run_id}.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump({"metrics": record, "history": history}, f, indent=2)
 
-    # ───── TXT EPOCH LOG ─────
+    # TXT
     txt_path = os.path.join(results_dir, "epochs.txt")
-
     with open(txt_path, "a", encoding="utf-8") as f:
         f.write("\n" + "="*70 + "\n")
         f.write(f"RUN: {run_id}\n")
@@ -167,7 +166,7 @@ def main(config_path):
     print(f" Vectorizer : {vec}")
     print("="*60)
 
-    # ───── LOAD DATA ─────
+    # LOAD DATA
     df = pd.read_csv(cfg["paths"]["data"])
     df = df.dropna(subset=[cfg["dataset"]["text_col"], cfg["dataset"]["label_col"]])
 
@@ -177,7 +176,7 @@ def main(config_path):
 
     print(f"[DATA] Samples: {len(X)}")
 
-    # ───── SPLIT ─────
+    # SPLIT
     X_train, X_val, y_train, y_val = train_test_split(
         X, y,
         test_size=cfg["dataset"]["test_size"],
@@ -185,22 +184,37 @@ def main(config_path):
         stratify=y
     )
 
-    # ───── VECTORIZE ─────
+    # VECTORIZE
     if vec == "camembert":
         from camembert import CamembertVectorizer
         v = CamembertVectorizer()
         X_train = v.encode_dataset(X_train.tolist())
         X_val = v.encode_dataset(X_val.tolist())
 
-    # ───── MODEL ─────
+    else:
+        from tfidf import TfidfVectorizerWrapper
+        v = TfidfVectorizerWrapper(max_features=cfg["model"]["input_size"])
+
+        X_train = v.fit_transform(X_train)
+        X_val = v.transform(X_val)
+
+        # 🔥 CRITICAL FIX (THIS WAS YOUR ERROR)
+        if hasattr(X_train, "toarray"):
+            X_train = X_train.toarray()
+            X_val = X_val.toarray()
+
+        X_train = np.asarray(X_train, dtype=np.float32)
+        X_val = np.asarray(X_val, dtype=np.float32)
+
+    # MODEL
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = get_model(cfg).to(device)
     trainer = Trainer(model, cfg, device)
 
-    # ───── TRAIN ─────
+    # TRAIN
     trainer.fit(X_train, y_train, X_val, y_val, label_encoder=le)
 
-    # ───── PREDICT ─────
+    # PREDICT
     y_pred = trainer.predict(X_val)
     y_train_pred = trainer.predict(X_train)
 
@@ -212,9 +226,8 @@ def main(config_path):
 
     print("[RESULTS]", metrics)
 
-    # ───── PLOTS ─────
-    plot_training(trainer.history,
-                  os.path.join(results_dir, run_id))
+    # PLOTS
+    plot_training(trainer.history, os.path.join(results_dir, run_id))
 
     plot_confusion_matrix(
         y_val, y_pred,
@@ -225,13 +238,12 @@ def main(config_path):
 
     evaluate(y_val, y_pred, label_encoder=le, model_name=run_id)
 
-    # ───── SAVE ALL ─────
     save_results(cfg, trainer.history, metrics, results_dir, run_id, timestamp)
 
     print(f"\n[DONE] Saved in {results_dir}")
 
 
-# ───────────────────────── ENTRY ─────────────────────────
+# ENTRY
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, required=True)
