@@ -4,8 +4,7 @@ import yaml
 import torch
 import numpy as np
 
-from lstm import get_model
-
+from models import get_model
 
 class Predictor:
 

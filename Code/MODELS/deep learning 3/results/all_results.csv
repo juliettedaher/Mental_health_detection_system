@@ -1,2 +1,0 @@
-timestamp,run_name,vectorizer,architecture,input_size,hidden_size,num_layers,dropout,n_folds,epochs,batch_size,learning_rate,weight_decay,clip_grad_norm,patience,mean_accuracy,std_accuracy,mean_f1_macro,std_f1_macro,overall_accuracy,overall_f1_macro,overall_f1_weighted
-20260601_131158,LSTM_TFIDF,tfidf,lstm,5000,256,2,0.3,5,50,32,0.001,1e-05,1.0,7,0.9696,0.0023,0.9695,0.0023,0.9696,0.9695,0.9696

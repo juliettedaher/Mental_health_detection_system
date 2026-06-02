@@ -1,0 +1,59 @@
+============================================================
+ French Mental Health Classifier
+ Model      : CNN_RNN
+ Vectorizer : camembert
+============================================================
+[DATA] Samples: 6022
+[CamemBERT] Loading model on cpu...
+
+================ TRAINING ================
+
+Epoch 1/50 | Train Loss: 0.6383 | Val Loss: 0.4874 | Val Acc: 0.7660
+Epoch 2/50 | Train Loss: 0.3841 | Val Loss: 0.4406 | Val Acc: 0.7900
+Epoch 3/50 | Train Loss: 0.3312 | Val Loss: 0.2963 | Val Acc: 0.8680
+Epoch 4/50 | Train Loss: 0.2947 | Val Loss: 0.2768 | Val Acc: 0.8846
+Epoch 5/50 | Train Loss: 0.2930 | Val Loss: 0.2760 | Val Acc: 0.8888
+Epoch 6/50 | Train Loss: 0.2700 | Val Loss: 0.2555 | Val Acc: 0.8954
+Epoch 7/50 | Train Loss: 0.2510 | Val Loss: 0.2667 | Val Acc: 0.8888
+Epoch 8/50 | Train Loss: 0.2620 | Val Loss: 0.2849 | Val Acc: 0.8672
+Epoch 9/50 | Train Loss: 0.2309 | Val Loss: 0.2561 | Val Acc: 0.8888
+Epoch 10/50 | Train Loss: 0.2282 | Val Loss: 0.2343 | Val Acc: 0.9004
+Epoch 11/50 | Train Loss: 0.2344 | Val Loss: 0.2367 | Val Acc: 0.9029
+Epoch 12/50 | Train Loss: 0.2218 | Val Loss: 0.2335 | Val Acc: 0.9079
+Epoch 13/50 | Train Loss: 0.2098 | Val Loss: 0.2775 | Val Acc: 0.8880
+Epoch 14/50 | Train Loss: 0.1995 | Val Loss: 0.2367 | Val Acc: 0.9029
+Epoch 15/50 | Train Loss: 0.1868 | Val Loss: 0.2437 | Val Acc: 0.9071
+Epoch 16/50 | Train Loss: 0.1764 | Val Loss: 0.4474 | Val Acc: 0.8282
+Epoch 17/50 | Train Loss: 0.1593 | Val Loss: 0.2524 | Val Acc: 0.8946
+Epoch 18/50 | Train Loss: 0.1459 | Val Loss: 0.2252 | Val Acc: 0.9154
+Epoch 19/50 | Train Loss: 0.1351 | Val Loss: 0.2312 | Val Acc: 0.9087
+Epoch 20/50 | Train Loss: 0.1438 | Val Loss: 0.3598 | Val Acc: 0.8506
+Epoch 21/50 | Train Loss: 0.1233 | Val Loss: 0.2375 | Val Acc: 0.9137
+Epoch 22/50 | Train Loss: 0.1230 | Val Loss: 0.2381 | Val Acc: 0.9120
+Epoch 23/50 | Train Loss: 0.0952 | Val Loss: 0.2356 | Val Acc: 0.9178
+Epoch 24/50 | Train Loss: 0.0856 | Val Loss: 0.2418 | Val Acc: 0.9212
+Epoch 25/50 | Train Loss: 0.0818 | Val Loss: 0.2415 | Val Acc: 0.9154
+[EARLY STOP]
+[RESULTS] {'train_accuracy': 0.9815237699813162, 'test_accuracy': 0.9153526970954357, 'test_f1_macro': 0.9149684807093086}
+[metrics] Saved → results1\CNN_RNN_camembert_20260602_183833_1581de_cm.png
+
+==================================================
+Results — CNN_RNN_camembert_20260602_183833_1581de
+==================================================
+Accuracy    : 0.9154
+F1 macro    : 0.9150
+F1 weighted : 0.9153
+
+Classification Report:
+
+              precision    recall  f1-score   support
+
+     Healthy       0.92      0.92      0.92       642
+   Unhealthy       0.91      0.91      0.91       563
+
+    accuracy                           0.92      1205
+   macro avg       0.92      0.91      0.91      1205
+weighted avg       0.92      0.92      0.92      1205
+
+
+[DONE] Saved in results1

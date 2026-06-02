@@ -1,0 +1,3 @@
+timestamp,run_name,vectorizer,architecture,input_size,hidden_size,num_layers,dropout,epochs,batch_size,learning_rate,weight_decay,clip_grad_norm,patience,train_mean_accuracy,test_mean_accuracy,test_mean_f1_macro
+20260602_181914,CNN_RNN_camembert_20260602_181914_9660fe,camembert,cnn_rnn,300,256,1,0.5,50,32,0.001,0.0001,1.0,7,0.9099024288976542,0.8838174273858921,0.8817056820540438
+20260602_183833,CNN_RNN_camembert_20260602_183833_1581de,camembert,cnn_rnn,768,256,1,0.5,50,32,0.001,0.0001,1.0,7,0.9815237699813162,0.9153526970954357,0.9149684807093086
