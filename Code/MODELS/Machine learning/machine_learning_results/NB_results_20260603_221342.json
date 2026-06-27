@@ -1,0 +1,58 @@
+[
+  {
+    "timestamp": "20260603_221342",
+    "model": "GNB+CamemBERT",
+    "split": "train",
+    "accuracy": 0.7851,
+    "f1_macro": 0.7833,
+    "f1_weighted": 0.7846,
+    "healthy_precision": 0.7841,
+    "healthy_recall": 0.8235,
+    "healthy_f1": 0.8033,
+    "unhealthy_precision": 0.7864,
+    "unhealthy_recall": 0.7413,
+    "unhealthy_f1": 0.7632
+  },
+  {
+    "timestamp": "20260603_221342",
+    "model": "GNB+CamemBERT",
+    "split": "test",
+    "accuracy": 0.7793,
+    "f1_macro": 0.777,
+    "f1_weighted": 0.7785,
+    "healthy_precision": 0.7749,
+    "healthy_recall": 0.8255,
+    "healthy_f1": 0.7994,
+    "unhealthy_precision": 0.785,
+    "unhealthy_recall": 0.7265,
+    "unhealthy_f1": 0.7546
+  },
+  {
+    "timestamp": "20260603_221342",
+    "model": "MNB+TF-IDF",
+    "split": "train",
+    "accuracy": 0.9884,
+    "f1_macro": 0.9883,
+    "f1_weighted": 0.9884,
+    "healthy_precision": 0.9902,
+    "healthy_recall": 0.9879,
+    "healthy_f1": 0.9891,
+    "unhealthy_precision": 0.9863,
+    "unhealthy_recall": 0.9889,
+    "unhealthy_f1": 0.9876
+  },
+  {
+    "timestamp": "20260603_221342",
+    "model": "MNB+TF-IDF",
+    "split": "test",
+    "accuracy": 0.966,
+    "f1_macro": 0.9658,
+    "f1_weighted": 0.966,
+    "healthy_precision": 0.963,
+    "healthy_recall": 0.9735,
+    "healthy_f1": 0.9682,
+    "unhealthy_precision": 0.9694,
+    "unhealthy_recall": 0.9574,
+    "unhealthy_f1": 0.9634
+  }
+]

@@ -4,7 +4,7 @@ cv:
   n_folds: 5
 
 model:
-  architecture: "cnnrnn"
+  architecture: "LSTM"
   input_size:   5000
   hidden_size:  256
   num_layers:   1

@@ -1,0 +1,5 @@
+timestamp,model,split,accuracy,f1_macro,f1_weighted,healthy_precision,healthy_recall,healthy_f1,unhealthy_precision,unhealthy_recall,unhealthy_f1
+20260603_221342,GNB+CamemBERT,train,0.7851,0.7833,0.7846,0.7841,0.8235,0.8033,0.7864,0.7413,0.7632
+20260603_221342,GNB+CamemBERT,test,0.7793,0.777,0.7785,0.7749,0.8255,0.7994,0.785,0.7265,0.7546
+20260603_221342,MNB+TF-IDF,train,0.9884,0.9883,0.9884,0.9902,0.9879,0.9891,0.9863,0.9889,0.9876
+20260603_221342,MNB+TF-IDF,test,0.966,0.9658,0.966,0.963,0.9735,0.9682,0.9694,0.9574,0.9634
